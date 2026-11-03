@@ -1,0 +1,129 @@
+:root {
+  --bg: #05080a;
+  --surface: #0d1117;
+  --surface-2: #111827;
+  --surface-3: #151f2e;
+
+  --text: #d8ffe7;
+  --text-dim: #7fa08c;
+
+  --accent: #00ff88;
+  --accent-dark: #00cc6a;
+
+  --border: #163126;
+
+  --danger: #ff4d6d;
+  --warning: #ffb703;
+  --info: #38bdf8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    Consolas,
+    "JetBrains Mono",
+    "Cascadia Code",
+    monospace;
+}
+
+aside {
+  width: 260px;
+  min-height: 100vh;
+
+  background: linear-gradient(
+    180deg,
+    #08120d 0%,
+    #05080a 100%
+  );
+
+  border-right: 1px solid var(--border);
+
+  padding: 24px;
+}
+
+aside h2 {
+  color: var(--accent);
+  margin-bottom: 30px;
+
+  text-shadow:
+    0 0 5px #00ff88,
+    0 0 15px #00ff88;
+}
+
+aside ul {
+  list-style: none;
+}
+
+aside li {
+  padding: 14px 10px;
+  margin-bottom: 6px;
+
+  border-radius: 6px;
+
+  cursor: pointer;
+
+  transition: 0.2s;
+}
+
+aside li:hover {
+  background: rgba(0, 255, 136, 0.08);
+
+  color: var(--accent);
+
+  transform: translateX(5px);
+}
+
+header {
+  height: 70px;
+
+  display: flex;
+  align-items: center;
+
+  padding: 0 24px;
+
+  background: var(--surface);
+
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  color: var(--accent);
+
+  text-shadow:
+    0 0 4px #00ff88,
+    0 0 10px #00ff88;
+}
+
+main {
+  padding: 30px;
+}
+
+main h1 {
+  color: var(--accent);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #06100b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #00ff88;
+}
