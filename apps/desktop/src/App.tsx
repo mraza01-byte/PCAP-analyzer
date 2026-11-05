@@ -1,50 +1,38 @@
-import { useState } from "react";
+import { useState } from 'react';
+import MainLayout from './layouts/MainLayout';
+import Briefing from './pages/Briefing';
+import Captures from './pages/Captures';
+import Flows from './pages/Flows';
+import Home from './pages/Home';
+import Hosts from './pages/Hosts';
+import Investigations from './pages/Investigations';
+import Settings from './pages/Settings';
+import Timeline from './pages/Timeline';
+import type { PageKey } from './types';
 
-import MainLayout from "./layouts/MainLayout";
+// ── Page Registry ──────────────────────────────────────────────
 
-import Home from "./pages/Home";
-import Captures from "./pages/Captures";
-import Hosts from "./pages/Hosts";
-import Flows from "./pages/Flows";
-import Timeline from "./pages/Timeline";
-import Investigations from "./pages/Investigations";
-import Briefing from "./pages/Briefing";
-import Settings from "./pages/Settings";
+const PAGES: Record<PageKey, React.ComponentType> = {
+  home:           Home,
+  captures:       Captures,
+  hosts:          Hosts,
+  flows:          Flows,
+  timeline:       Timeline,
+  investigations: Investigations,
+  briefing:       Briefing,
+  settings:       Settings,
+};
+
+// ── App ────────────────────────────────────────────────────────
 
 export default function App() {
-  const [page, setPage] = useState("home");
+  const [currentPage, setCurrentPage] = useState<PageKey>('home');
 
-  const renderPage = () => {
-    switch (page) {
-      case "captures":
-        return <Captures />;
-
-      case "hosts":
-        return <Hosts />;
-
-      case "flows":
-        return <Flows />;
-
-      case "timeline":
-        return <Timeline />;
-
-      case "investigations":
-        return <Investigations />;
-
-      case "briefing":
-        return <Briefing />;
-
-      case "settings":
-        return <Settings />;
-
-      default:
-        return <Home />;
-    }
-  };
+  const PageComponent = PAGES[currentPage];
 
   return (
-    <MainLayout setPage={setPage}>
-      {renderPage()}
+    <MainLayout currentPage={currentPage} onNavigate={setCurrentPage}>
+      <PageComponent />
     </MainLayout>
   );
 }
