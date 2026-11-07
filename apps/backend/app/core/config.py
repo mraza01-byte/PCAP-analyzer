@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # Empty means "use the default SQLite file inside <backend>/data/".
     database_url: str = ""
 
+    # Create/update the database structure automatically when the backend starts.
+    auto_migrate: bool = True
+
     # Who may call the API from a browser context (Vite dev server + Tauri).
     cors_origins: list[str] = [
         "http://localhost:1420",

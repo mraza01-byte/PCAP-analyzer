@@ -159,7 +159,7 @@ They will be added as new tables through new Alembic migrations.
 
 ## Migrations (Alembic)
 
-Run from `apps/backend`:
+The backend applies migrations automatically at startup. To run them by hand, from `apps/backend`:
 
 ```
 alembic upgrade head      # create / update the database to the latest structure

@@ -34,6 +34,11 @@ class ConflictError(AppError):
     code = "conflict"
 
 
+class ServiceUnavailableError(AppError):
+    status_code = 503
+    code = "service_unavailable"
+
+
 def _error_response(request: Request, status_code: int, code: str, message: str, details=None):
     body = {
         "error": {

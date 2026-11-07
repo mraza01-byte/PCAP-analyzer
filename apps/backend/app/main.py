@@ -7,9 +7,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import health
+from app.api.v1 import router as v1_router
 from app.core.config import get_settings
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
+from app.core.migrations import run_migrations
 
 settings = get_settings()
 setup_logging(settings.log_level, settings.log_format)
@@ -18,10 +20,14 @@ logger = logging.getLogger("pcapman")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    current = get_settings()
     logger.info(
         "Backend starting",
-        extra={"version": settings.app_version, "environment": settings.environment},
+        extra={"version": current.app_version, "environment": current.environment},
     )
+    if current.auto_migrate:
+        run_migrations()
+        logger.info("Database is up to date")
     yield
     logger.info("Backend stopped")
 
@@ -64,3 +70,4 @@ async def log_requests(request: Request, call_next):
 
 register_error_handlers(app)
 app.include_router(health.router)
+app.include_router(v1_router)

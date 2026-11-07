@@ -15,6 +15,8 @@ pip install -r requirements-dev.txt
 
 ## Run
 
+Starting the backend also creates/updates the SQLite database automatically (no separate Alembic step needed).
+
 ```
 uvicorn app.main:app --reload
 ```
@@ -22,6 +24,8 @@ uvicorn app.main:app --reload
 Then open http://127.0.0.1:8000/health  (API docs: http://127.0.0.1:8000/docs)
 
 Expected reply: `{"status":"healthy","application":"PCAP-MAN"}`
+
+The desktop app (`apps/desktop`) talks to this service at `http://localhost:8000`. Start the backend first, then `npm run tauri dev` (or `npm run dev`) in `apps/desktop`. See `docs/API.md` for every endpoint.
 
 ## Database
 
@@ -52,4 +56,4 @@ All optional. Copy `.env.example` to `.env` to change them. See `app/core/config
 | `app/schemas` | request/reply shapes (Pydantic) |
 | `app/services` | business logic (later) |
 | `alembic` | database migrations |
-| `docs` | database design and ERD |
+| `docs` | database design/ERD (`DATABASE.md`) and API reference (`API.md`) |
