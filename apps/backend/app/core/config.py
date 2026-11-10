@@ -35,9 +35,11 @@ class Settings(BaseSettings):
 
     # Empty means "use the default SQLite file inside <backend>/data/".
     database_url: str = ""
+    data_directory: Path | None = None
 
     # Create/update the database structure automatically when the backend starts.
     auto_migrate: bool = True
+    max_upload_size_bytes: int = 1_073_741_824
 
     # Who may call the API from a browser context (Vite dev server + Tauri).
     cors_origins: list[str] = [
@@ -65,7 +67,13 @@ class Settings(BaseSettings):
 
     @property
     def data_dir(self) -> Path:
-        return BACKEND_DIR / "data"
+        return self.data_directory or BACKEND_DIR / "data"
+
+    @property
+    def evidence_dir(self) -> Path:
+        directory = self.data_dir / "evidence"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
 
     @property
     def resolved_database_url(self) -> str:

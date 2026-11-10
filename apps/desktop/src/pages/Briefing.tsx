@@ -23,21 +23,24 @@ import {
 export default function Briefing() {
   const [report, setReport] = useState<BriefingReportRecord | null>(null);
   const [cases, setCases] = useState<InvestigationCaseRecord[]>([]);
-  const [selectedCaseId, setSelectedCaseId] = useState<number | undefined>(undefined);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [copied, setCopied] = useState(false);
 
-  const fetchReport = async (caseId?: number) => {
+  const fetchReport = async (caseId?: string) => {
     setLoading(true);
+    setErrorMessage('');
     try {
-      const [rep, caseList] = await Promise.all([
-        generateBriefingReport(caseId),
-        getInvestigations(),
-      ]);
+      const caseList = await getInvestigations();
+      const targetCaseId = caseId || caseList[0]?.id;
+      const rep = await generateBriefingReport(targetCaseId);
       setReport(rep);
       setCases(caseList);
+      if (!caseId && targetCaseId) setSelectedCaseId(targetCaseId);
     } catch (err) {
       console.error('Failed to generate briefing report', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not generate briefing');
     } finally {
       setLoading(false);
     }
@@ -66,14 +69,13 @@ ${report.executive_summary}
 2. ANALYST FINDINGS:
 ${report.case_findings}
 
-3. INDICATORS OF COMPROMISE (IOCs):
+3. OBSERVED NETWORK INDICATORS:
 ${report.iocs.map((i) => `• [${i.type}] ${i.value} (${i.attribution} - ${i.reputation})`).join('\n')}
 
-4. REMEDIATION RECOMMENDATIONS:
-${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
+${report.recommendations.length ? `4. REMEDIATION RECOMMENDATIONS:\n${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}` : ''}
 
 ================================================================================
-Chain of Custody Cryptographically Verified by PCAP-MAN Core Engine
+Evidence SHA-256 values are recorded from the uploaded files.
 ================================================================================
 `.trim();
 
@@ -101,24 +103,22 @@ ${report.executive_summary}
 ## 2. Technical Findings
 ${report.case_findings}
 
-## 3. Cyber Kill-Chain Progression
-${report.kill_chain.map((k) => `### ${k.phase} [Status: ${k.status}]\n${k.observation}\n`).join('\n')}
+${report.kill_chain.length ? `## 3. Cyber Kill-Chain Progression\n${report.kill_chain.map((k) => `### ${k.phase} [Status: ${k.status}]\n${k.observation}\n`).join('\n')}` : ''}
 
 ## 4. Indicators of Compromise (IOCs)
 | Type | Artifact Value | Threat Attribution | Reputation |
 | :--- | :--- | :--- | :--- |
 ${report.iocs.map((i) => `| **${i.type}** | \`${i.value}\` | ${i.attribution} | ${i.reputation} |`).join('\n')}
 
-## 5. Ingested Evidence Chain of Custody
+## 5. Evidence File Metadata
 | Capture File | SHA-256 Digest | Packet Count | Size (KB) |
 | :--- | :--- | :--- | :--- |
 ${report.evidence_records.map((e) => `| ${e.filename} | \`${e.sha256}\` | ${e.packet_count} | ${e.size_kb} KB |`).join('\n')}
 
-## 6. Incident Remediation Action Plan
-${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
+${report.recommendations.length ? `## 6. Incident Remediation Action Plan\n${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}` : ''}
 
 ---
-*Signed and sealed by PCAP-MAN Local Forensic Verification Ledger.*
+*Evidence SHA-256 values are recorded from the uploaded files.*
 `;
 
     const blob = new Blob([mdContent], { type: 'text/markdown' });
@@ -245,7 +245,7 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
           </span>
           <select
             value={selectedCaseId || ''}
-            onChange={(e) => setSelectedCaseId(e.target.value ? Number(e.target.value) : undefined)}
+            onChange={(e) => setSelectedCaseId(e.target.value || undefined)}
             style={{
               backgroundColor: '#0b0f19',
               border: '1px solid #334155',
@@ -286,7 +286,9 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
       </div>
 
       {/* Formal Document Preview Paper */}
-      {loading ? (
+      {errorMessage ? (
+        <div role="alert" style={{ textAlign: 'center', padding: '48px', color: '#fca5a5' }}>{errorMessage}</div>
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
           Synthesizing intelligence dossier...
         </div>
@@ -365,8 +367,7 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
             </div>
           </div>
 
-          {/* Section 2: Cyber Kill-Chain Progression */}
-          <div>
+          {report.kill_chain.length > 0 && <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <Layers size={16} style={{ color: '#a78bfa' }} />
               <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', margin: 0, textTransform: 'uppercase' }}>
@@ -403,14 +404,14 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Section 3: Indicators of Compromise Matrix */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <ShieldAlert size={16} style={{ color: '#ef4444' }} />
               <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', margin: 0, textTransform: 'uppercase' }}>
-                3. Indicators of Compromise (IOC) Matrix
+                3. Observed Network Indicators
               </h3>
             </div>
             <div style={{ overflowX: 'auto', backgroundColor: '#111827', borderRadius: '10px', border: '1px solid #1f2937' }}>
@@ -437,12 +438,12 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
             </div>
           </div>
 
-          {/* Section 4: Evidentiary Chain of Custody */}
+          {/* Evidence file metadata */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <ShieldCheck size={16} style={{ color: 'var(--color-terminal)' }} />
               <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', margin: 0, textTransform: 'uppercase' }}>
-                4. Evidentiary PCAP Chain of Custody
+                4. Evidence File Metadata
               </h3>
             </div>
             <div style={{ overflowX: 'auto', backgroundColor: '#111827', borderRadius: '10px', border: '1px solid #1f2937' }}>
@@ -471,8 +472,7 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
             </div>
           </div>
 
-          {/* Section 5: Strategic Remediation Action Plan */}
-          <div>
+          {report.recommendations.length > 0 && <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
               <AlertTriangle size={16} style={{ color: '#f59e0b' }} />
               <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', margin: 0, textTransform: 'uppercase' }}>
@@ -509,7 +509,7 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* Sign-off Seal */}
           <div style={{
@@ -522,11 +522,11 @@ ${report.recommendations.map((r, idx) => `${idx + 1}. ${r}`).join('\n')}
             color: '#64748b',
           }}>
             <div>
-              Certified by: <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{report.lead_analyst}</span>
+              Prepared by: <span style={{ color: '#cbd5e1', fontWeight: 600 }}>{report.lead_analyst}</span>
             </div>
             <div style={{ color: 'var(--color-terminal)', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ShieldCheck size={16} />
-              <span>Immutable Chain of Custody Verified</span>
+              <span>Evidence hashes recorded</span>
             </div>
           </div>
         </div>

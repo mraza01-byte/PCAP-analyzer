@@ -23,6 +23,10 @@ class Flow(IdTimestampMixin, Base):
     end_time: Mapped[datetime | None] = mapped_column(UTCDateTime)
     packet_count: Mapped[int] = mapped_column(BigInteger, default=0)
     byte_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_forward: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_reverse: Mapped[int] = mapped_column(BigInteger, default=0)
+    application: Mapped[str] = mapped_column(String(32), default="")
+    tcp_flags: Mapped[str] = mapped_column(String(32), default="-")
 
     capture: Mapped["Capture"] = relationship(back_populates="flows")
     src_host: Mapped["Host"] = relationship(foreign_keys=[src_host_id])

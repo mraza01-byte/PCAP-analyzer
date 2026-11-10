@@ -30,5 +30,5 @@ def get_platform_settings() -> PlatformSettings:
         cpu_count=os.cpu_count() or 1,
         tshark_detected=False,
         tshark_binary_path="",
-        evidence_directory="",
+        evidence_directory=str(settings.evidence_dir),
     )

@@ -10,51 +10,66 @@ class _Out(BaseModel):
 
 class CaptureOut(_Out):
     id: str
-    original_filename: str
+    filename: str
     file_size_bytes: int
     sha256: str
-    file_format: str
+    file_type: str
     status: str
     packet_count: int | None
     first_packet_at: datetime | None
     last_packet_at: datetime | None
+    flow_count: int
+    duration_seconds: float
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 
 
 class HostOut(_Out):
-    id: str
-    capture_id: str
-    ip_address: str
-    mac_address: str | None
-    hostname: str | None
-    first_seen_at: datetime | None
-    last_seen_at: datetime | None
+    ip: str
+    mac: str
+    hostname: str
+    role: str
+    open_ports: list[int]
+    bytes_total: int
+    bytes_sent: int
+    bytes_received: int
+    packet_count: int
+    first_seen: datetime | None
+    last_seen: datetime | None
 
 
 class FlowOut(_Out):
     id: str
-    capture_id: str
-    src_host_id: str
-    dst_host_id: str
-    src_port: int | None
-    dst_port: int | None
+    flow_key: str
+    src_ip: str
+    src_port: int
+    dst_ip: str
+    dst_port: int
     protocol: str
+    application: str
+    packet_count: int
+    bytes_total: int
+    bytes_forward: int
+    bytes_reverse: int
     start_time: datetime | None
     end_time: datetime | None
-    packet_count: int
-    byte_count: int
+    tcp_flags: str
+    summary: str
+    capture_filename: str
 
 
 class TimelineEventOut(_Out):
     id: str
-    capture_id: str
-    investigation_id: str | None
-    flow_id: str | None
-    event_time: datetime
+    timestamp: datetime
     event_type: str
-    title: str
-    description: str | None
+    protocol: str
+    src: str
+    dst: str
+    severity: str
+    category: str
+    description: str
+    capture_filename: str
 
 
 class InvestigationOut(_Out):

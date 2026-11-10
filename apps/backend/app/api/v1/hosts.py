@@ -17,4 +17,16 @@ def list_hosts(search: str | None = None, limit: int = Query(500, ge=1, le=5000)
         query = query.where(or_(Host.ip_address.like(like), Host.hostname.like(like), Host.mac_address.like(like)))
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     hosts = db.scalars(query.order_by(Host.ip_address).limit(limit)).all()
-    return HostList(total=total, hosts=hosts)
+    return HostList(total=total, hosts=[{
+        "ip": host.ip_address,
+        "mac": host.mac_address or "",
+        "hostname": host.hostname or "",
+        "role": "Observed endpoint",
+        "open_ports": host.open_ports or [],
+        "bytes_total": host.bytes_sent + host.bytes_received,
+        "bytes_sent": host.bytes_sent,
+        "bytes_received": host.bytes_received,
+        "packet_count": host.packet_count,
+        "first_seen": host.first_seen_at,
+        "last_seen": host.last_seen_at,
+    } for host in hosts])

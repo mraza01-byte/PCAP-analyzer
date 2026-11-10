@@ -43,6 +43,10 @@ class Investigation(IdTimestampMixin, Base):
 
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    severity: Mapped[str] = mapped_column(String(16), default="medium")
+    lead_analyst: Mapped[str] = mapped_column(String(255), default="")
+    findings: Mapped[str | None] = mapped_column(Text)
+    ioc_list: Mapped[str | None] = mapped_column(Text)
     status: Mapped[InvestigationStatus] = mapped_column(
         Enum(InvestigationStatus, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
         default=InvestigationStatus.OPEN,

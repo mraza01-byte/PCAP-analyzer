@@ -59,6 +59,10 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_error(request: Request, exc: StarletteHTTPException):
+        if isinstance(exc.detail, dict):
+            message = str(exc.detail.get("message", "Request failed."))
+            details = {key: value for key, value in exc.detail.items() if key != "message"}
+            return _error_response(request, exc.status_code, "http_error", message, details or None)
         return _error_response(request, exc.status_code, "http_error", str(exc.detail))
 
     @app.exception_handler(RequestValidationError)

@@ -15,6 +15,7 @@ import { getFlows, getFlowDetail, type FlowRecord } from '../services/api';
 export default function Flows() {
   const [flows, setFlows] = useState<FlowRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [selectedFlow, setSelectedFlow] = useState<FlowRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [protocolFilter, setProtocolFilter] = useState<string>('ALL');
@@ -22,6 +23,7 @@ export default function Flows() {
 
   const fetchFlowData = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
       const res = await getFlows({
         protocol: protocolFilter !== 'ALL' ? protocolFilter : undefined,
@@ -30,6 +32,7 @@ export default function Flows() {
       setFlows(res.flows);
     } catch (err) {
       console.error('Failed to load flows', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not load flows');
     } finally {
       setLoading(false);
     }
@@ -222,7 +225,9 @@ export default function Flows() {
 
       {/* Main Flow Table */}
       <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '12px', overflow: 'hidden' }}>
-        {loading ? (
+        {errorMessage ? (
+          <div role="alert" style={{ textAlign: 'center', padding: '48px', color: '#fca5a5' }}>{errorMessage}</div>
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
             Dissecting packet flows...
           </div>

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import BigInteger, ForeignKey, Index, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -19,6 +19,10 @@ class Host(IdTimestampMixin, Base):
     hostname: Mapped[str | None] = mapped_column(String(255))
     first_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_seen_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    packet_count: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_sent: Mapped[int] = mapped_column(BigInteger, default=0)
+    bytes_received: Mapped[int] = mapped_column(BigInteger, default=0)
+    open_ports: Mapped[list[int]] = mapped_column(JSON, default=list)
 
     capture: Mapped["Capture"] = relationship(back_populates="hosts")
 

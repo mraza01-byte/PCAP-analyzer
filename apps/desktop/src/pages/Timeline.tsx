@@ -15,13 +15,15 @@ import { getTimelineEvents, type TimelineEventRecord } from '../services/api';
 export default function Timeline() {
   const [events, setEvents] = useState<TimelineEventRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
 
   const fetchEvents = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
       const res = await getTimelineEvents({
         severity: severityFilter !== 'ALL' ? severityFilter : undefined,
@@ -31,6 +33,7 @@ export default function Timeline() {
       setEvents(res.events);
     } catch (err) {
       console.error('Failed to load timeline events', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not load timeline');
     } finally {
       setLoading(false);
     }
@@ -40,7 +43,7 @@ export default function Timeline() {
     fetchEvents();
   }, [severityFilter, categoryFilter]);
 
-  const toggleBookmark = (id: number) => {
+  const toggleBookmark = (id: string) => {
     setBookmarkedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -86,7 +89,7 @@ export default function Timeline() {
             </span>
           </div>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '4px', maxWidth: '640px' }}>
-            Sequential timeline reconstruction of all network interactions. Correlates DNS queries, TLS handshakes, HTTP requests, and lateral movements in microsecond order.
+            Packet-derived flow start and last-seen events ordered by their capture timestamps.
           </p>
         </div>
 
@@ -152,7 +155,7 @@ export default function Timeline() {
           </div>
 
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', backgroundColor: '#0b0f19', padding: '2px', borderRadius: '8px', border: '1px solid #1f2937' }}>
-            {['ALL', 'Resolution', 'Encryption', 'C2 Traffic', 'Lateral Movement'].map((cat) => (
+            {['ALL', 'TCP', 'UDP', 'ICMP', 'Other'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}
@@ -250,7 +253,9 @@ export default function Timeline() {
           zIndex: 0,
         }} />
 
-        {loading ? (
+        {errorMessage ? (
+          <div role="alert" style={{ textAlign: 'center', padding: '48px', color: '#fca5a5' }}>{errorMessage}</div>
+        ) : loading ? (
           <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
             Reconstructing event chronology...
           </div>

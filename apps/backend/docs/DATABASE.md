@@ -1,11 +1,11 @@
-# PCAP-MAN Database Design (Phase 1)
+# PCAP-MAN Database Design
 
 PCAP-MAN is **entity-centric**: the database stores *things an investigator cares about*
 (captures, hosts, flows, investigations), not a giant list of packets.
 Packets stay inside the original capture file as evidence.
 
-Phase 1 only defines the structure. No packet parsing exists yet, so every table starts empty
-and no values are invented.
+Captures are retained as evidence files; the engine's derived hosts, flows, and timeline records
+are persisted against each capture. A fresh database starts empty.
 
 ## Rules for every table
 
@@ -16,7 +16,7 @@ and no values are invented.
 
 ## The chain
 
-```
+```text
 Capture  ->  Host  ->  Flow  ->  Investigation
 ```
 
@@ -49,9 +49,10 @@ erDiagram
         string sha256
         string file_format
         string status
-        bigint packet_count "empty until parsed"
-        datetime first_packet_at "empty until parsed"
-        datetime last_packet_at "empty until parsed"
+        bigint packet_count
+        datetime first_packet_at
+        datetime last_packet_at
+        string error_message
         datetime created_at
         datetime updated_at
     }
@@ -63,6 +64,10 @@ erDiagram
         string hostname
         datetime first_seen_at
         datetime last_seen_at
+        bigint packet_count
+        bigint bytes_sent
+        bigint bytes_received
+        json open_ports
         datetime created_at
         datetime updated_at
     }
@@ -78,6 +83,10 @@ erDiagram
         datetime end_time
         bigint packet_count
         bigint byte_count
+        bigint bytes_forward
+        bigint bytes_reverse
+        string application
+        string tcp_flags
         datetime created_at
         datetime updated_at
     }
@@ -85,6 +94,10 @@ erDiagram
         string id PK
         string title
         text description
+        string severity
+        string lead_analyst
+        text findings
+        text ioc_list
         string status
         datetime closed_at
         datetime created_at
@@ -117,7 +130,7 @@ erDiagram
 ## Relationships and delete behaviour
 
 | Link | If the parent is deleted |
-|---|---|
+| --- | --- |
 | Capture -> Hosts, Flows, TimelineEvents | They are deleted too (they only make sense inside their capture) |
 | Host -> Flows (source / destination) | The flows are deleted too |
 | Investigation / Capture / Flow -> link tables | The link rows are deleted; the other side survives |
@@ -131,12 +144,12 @@ An Investigation is never deleted just because a Capture was removed.
 - **Hosts belong to one capture.** The same IP in two captures is two Host rows. (A given IP can appear only once per capture.) Matching hosts across captures can be added later without changing this structure.
 - **Investigations link to captures and flows through two small link tables**, because one investigation can include many of each, and one capture or flow can belong to many investigations.
 - **Status and format values** (`pcap`/`pcapng`; `imported`/`processing`/`completed`/`failed`; `open`/`in_progress`/`closed`) are stored as plain text so they stay easy to read and extend.
-- Counters such as `packet_count` and `byte_count` on a Flow default to 0; on a Capture, `packet_count` and the first/last packet times are empty (NULL) until a parser fills them.
+- Packet, byte, direction, and timestamp fields are populated by the capture parser. Failed analysis status and error text remain on the capture record.
 
 ## Indexes
 
 | Table | Index | Why |
-|---|---|---|
+| --- | --- | --- |
 | captures | `sha256` | Find duplicate imports / verify evidence |
 | hosts | `capture_id`, `ip_address`; unique (`capture_id`, `ip_address`) | List hosts of a capture, look up an IP |
 | flows | (`capture_id`, `start_time`), `src_host_id`, `dst_host_id`, `protocol` | Browse a capture's flows in time order, find a host's flows, filter by protocol |
@@ -144,10 +157,10 @@ An Investigation is never deleted just because a Capture was removed.
 | timeline_events | (`capture_id`, `event_time`), (`investigation_id`, `event_time`), `flow_id` | Build timelines quickly |
 | link tables | `capture_id` / `flow_id` (the primary key already covers `investigation_id`) | Reverse lookups |
 
-## Future entities (NOT implemented in Phase 1)
+## Future entities
 
 | Entity | Purpose |
-|---|---|
+| --- | --- |
 | Alert | Something suspicious flagged on a host or flow |
 | Artifact | A file or object found inside traffic |
 | Certificate | TLS certificates seen in traffic |
@@ -161,7 +174,7 @@ They will be added as new tables through new Alembic migrations.
 
 The backend applies migrations automatically at startup. To run them by hand, from `apps/backend`:
 
-```
+```sh
 alembic upgrade head      # create / update the database to the latest structure
 alembic current           # show which version the database is at
 alembic downgrade base    # undo everything (empty database)

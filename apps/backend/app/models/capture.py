@@ -42,6 +42,7 @@ class Capture(IdTimestampMixin, Base):
     packet_count: Mapped[int | None] = mapped_column(BigInteger)
     first_packet_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_packet_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    error_message: Mapped[str | None] = mapped_column(String(2000))
 
     hosts: Mapped[list["Host"]] = relationship(back_populates="capture", cascade="all, delete-orphan", passive_deletes=True)
     flows: Mapped[list["Flow"]] = relationship(back_populates="capture", cascade="all, delete-orphan", passive_deletes=True)

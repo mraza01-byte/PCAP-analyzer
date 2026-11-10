@@ -14,7 +14,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSystemStats, probeBackend } from '../services/api';
+import { API_BASE, getSystemStats, probeBackend } from '../services/api';
 import type { BackendStatus, SystemStats } from '../services/api';
 
 // ── Sub-types ──────────────────────────────────────────────────
@@ -190,11 +190,10 @@ function PhaseNotice() {
       <Zap size={16} style={{ color: 'var(--color-cyan)', flexShrink: 0 }} />
       <div>
         <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--color-cyan)', marginBottom: '3px' }}>
-          Phase 1 — Foundation Platform
+          PCAP-MAN — Network Forensics
         </div>
         <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-          Core infrastructure is operational. PCAP import, network intelligence, and investigation
-          workspace are scheduled for Phases 2–4.
+          Upload captures, inspect observed hosts and flows, reconstruct packet-time events, and track investigations using the local analysis backend.
         </div>
       </div>
     </div>
@@ -205,6 +204,7 @@ function PhaseNotice() {
 
 export default function Home() {
   const [stats, setStats] = useState<SystemStats>({ captures: 0, hosts: 0, flows: 0, investigations: 0 });
+  const [statsError, setStatsError] = useState('');
   const [telemetry, setTelemetry] = useState<TelemetryState>({
     tauri: 'inactive',
     backend: 'checking',
@@ -242,11 +242,16 @@ export default function Home() {
       const tauriStatus = detectTauri();
       setTelemetry((prev) => ({ ...prev, tauri: tauriStatus }));
 
-      const [, fetchedStats] = await Promise.all([
-        checkBackend(),
-        getSystemStats(),
-      ]);
-      setStats(fetchedStats);
+      const [, fetchedStats] = await Promise.all([checkBackend(), getSystemStats().then(
+        (value) => ({ value }),
+        (error: unknown) => ({ error }),
+      )]);
+      if ('value' in fetchedStats) {
+        setStats(fetchedStats.value);
+        setStatsError('');
+      } else {
+        setStatsError(fetchedStats.error instanceof Error ? fetchedStats.error.message : 'System statistics are unavailable');
+      }
     };
     init();
 
@@ -276,6 +281,7 @@ export default function Home() {
       className="animate-fade-in-up"
       style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '1200px' }}
     >
+      {statsError && <div role="alert" style={{ color: '#fca5a5', fontSize: '13px' }}>{statsError}</div>}
       {/* ── Hero Branding ───────────────────────────────────── */}
       <div
         id="home-hero"
@@ -451,7 +457,7 @@ export default function Home() {
             label="Backend Service"
             statusLabel={backendLabel}
             statusVariant={backendVariant}
-            detail={`FastAPI @ localhost:8000  ·  ${lastCheckedStr}`}
+            detail={`FastAPI @ ${API_BASE}  ·  ${lastCheckedStr}`}
             accentColor={
               backendVariant === 'online'   ? 'var(--color-green)' :
               backendVariant === 'checking' ? 'var(--color-amber)' :
@@ -612,7 +618,7 @@ export default function Home() {
               Backend Unreachable
             </div>
             <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              FastAPI server is not responding at <span className="mono">localhost:8000</span>.
+              FastAPI server is not responding at <span className="mono">{API_BASE}</span>.
               Start the backend with <span className="mono">uvicorn app.main:app --reload</span>.
             </div>
           </div>

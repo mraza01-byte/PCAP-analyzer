@@ -18,6 +18,7 @@ def _clear_caches():
 def isolated_database(tmp_path, monkeypatch):
     """Every test gets its own empty database file, never the developer's real one."""
     monkeypatch.setenv("PCAPMAN_DATABASE_URL", f"sqlite:///{(tmp_path / 'app.db').as_posix()}")
+    monkeypatch.setenv("PCAPMAN_DATA_DIRECTORY", str(tmp_path / "data"))
     _clear_caches()
     yield
     get_engine().dispose() if get_engine.cache_info().currsize else None

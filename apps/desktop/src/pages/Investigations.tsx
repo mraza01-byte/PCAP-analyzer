@@ -11,16 +11,20 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import {
+  getCaptures,
   getInvestigations,
   createInvestigation,
   updateInvestigation,
   deleteInvestigation,
   type InvestigationCaseRecord,
+  type CaptureRecord,
 } from '../services/api';
 
 export default function Investigations() {
   const [cases, setCases] = useState<InvestigationCaseRecord[]>([]);
+  const [captures, setCaptures] = useState<CaptureRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [selectedCase, setSelectedCase] = useState<InvestigationCaseRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -32,6 +36,7 @@ export default function Investigations() {
   const [newAnalyst, setNewAnalyst] = useState('PCAP-MAN (Lead Forensic Specialist)');
   const [newDesc, setNewDesc] = useState('');
   const [newIoc, setNewIoc] = useState('');
+  const [newCaptureId, setNewCaptureId] = useState('');
 
   // Editing state
   const [editFindings, setEditFindings] = useState('');
@@ -39,9 +44,11 @@ export default function Investigations() {
 
   const fetchCases = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
-      const data = await getInvestigations();
+      const [data, captureData] = await Promise.all([getInvestigations(), getCaptures()]);
       setCases(data);
+      setCaptures(captureData);
       if (selectedCase) {
         const refreshed = data.find((c) => c.id === selectedCase.id);
         if (refreshed) {
@@ -52,6 +59,7 @@ export default function Investigations() {
       }
     } catch (err) {
       console.error(err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not load investigations');
     } finally {
       setLoading(false);
     }
@@ -78,15 +86,18 @@ export default function Investigations() {
         lead_analyst: newAnalyst,
         description: newDesc,
         ioc_list: newIoc,
+        linked_capture_ids: newCaptureId ? [newCaptureId] : [],
       });
       setCases((prev) => [created, ...prev]);
       setIsCreateOpen(false);
       setNewTitle('');
       setNewDesc('');
       setNewIoc('');
+      setNewCaptureId('');
       handleOpenCase(created);
     } catch (err) {
       console.error('Failed to create case', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not create investigation');
     }
   };
 
@@ -103,14 +114,19 @@ export default function Investigations() {
       setTimeout(() => setSavedSuccess(false), 2000);
     } catch (err) {
       console.error('Failed to update case', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not update investigation');
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Permanently close and delete this forensic case?')) {
-      await deleteInvestigation(id);
-      setCases((prev) => prev.filter((c) => c.id !== id));
-      if (selectedCase?.id === id) setSelectedCase(null);
+      try {
+        await deleteInvestigation(id);
+        setCases((prev) => prev.filter((c) => c.id !== id));
+        if (selectedCase?.id === id) setSelectedCase(null);
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : 'Could not delete investigation');
+      }
     }
   };
 
@@ -170,6 +186,7 @@ export default function Investigations() {
           <span>New Forensic Case</span>
         </button>
       </div>
+      {errorMessage && <div role="alert" style={{ color: '#fca5a5', fontSize: '13px' }}>{errorMessage}</div>}
 
       {/* Main Workspace Layout (Left: Cases List, Right: Active Case Dossier) */}
       <div style={{ display: 'grid', gridTemplateColumns: selectedCase ? '1fr 1.3fr' : '1fr', gap: '20px', alignItems: 'flex-start' }}>
@@ -209,7 +226,9 @@ export default function Investigations() {
           </div>
 
           {/* Cases Cards */}
-          {loading ? (
+          {errorMessage ? (
+            <div role="alert" style={{ textAlign: 'center', padding: '40px', color: '#fca5a5' }}>{errorMessage}</div>
+          ) : loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
               Loading investigation files...
             </div>
@@ -525,6 +544,8 @@ export default function Investigations() {
               borderRadius: '16px',
               maxWidth: '560px',
               width: '100%',
+              maxHeight: 'calc(100vh - 40px)',
+              overflowY: 'auto',
               padding: '24px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
             }}
@@ -611,6 +632,22 @@ export default function Investigations() {
                     }}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                  Linked Capture Evidence
+                </label>
+                <select
+                  value={newCaptureId}
+                  onChange={(event) => setNewCaptureId(event.target.value)}
+                  style={{ width: '100%', backgroundColor: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#f8fafc', fontSize: '13px' }}
+                >
+                  <option value="">No capture linked</option>
+                  {captures.filter((capture) => capture.status === 'analyzed').map((capture) => (
+                    <option key={capture.id} value={capture.id}>{capture.filename} ({capture.packet_count} packets)</option>
+                  ))}
+                </select>
               </div>
 
               <div>

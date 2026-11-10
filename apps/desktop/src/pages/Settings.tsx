@@ -10,6 +10,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import {
+  API_BASE,
   getPlatformSettings,
   probeBackend,
   checkBackendHealth,
@@ -20,19 +21,19 @@ import {
 export default function Settings() {
   const [settingsData, setSettingsData] = useState<SystemSettingsRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [testingConnection, setTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<BackendStatus>('checking');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // User Profile
-  const [analystName, setAnalystName] = useState(() => localStorage.getItem('pcapman_analyst_name') || 'PCAP-MAN (Lead Forensic Specialist)');
-  const [organization, setOrganization] = useState(() => localStorage.getItem('pcapman_organization') || 'REVA University — Cyber Forensics Lab');
-  const [clearance, setClearance] = useState(() => localStorage.getItem('pcapman_clearance') || 'Level 3 — Certified Threat Hunter');
+  const [analystName, setAnalystName] = useState(() => localStorage.getItem('pcapman_analyst_name') || '');
+  const [organization, setOrganization] = useState(() => localStorage.getItem('pcapman_organization') || '');
+  const [clearance, setClearance] = useState(() => localStorage.getItem('pcapman_clearance') || '');
 
   // Preferences
   const [hashAlgo, setHashAlgo] = useState(() => localStorage.getItem('pcapman_hash_algo') || 'SHA-256');
   const [themeAccent, setThemeAccent] = useState(() => localStorage.getItem('pcapman_theme_accent') || 'cyan');
-  const [tsharkCustomPath, setTsharkCustomPath] = useState('');
 
   const loadSettings = async () => {
     setLoading(true);
@@ -40,11 +41,9 @@ export default function Settings() {
       const [data, conn] = await Promise.all([getPlatformSettings(), probeBackend()]);
       setSettingsData(data);
       setConnectionStatus(conn);
-      if (data.tshark_binary_path && !data.tshark_binary_path.includes('Not Installed')) {
-        setTsharkCustomPath(data.tshark_binary_path);
-      }
     } catch (err) {
       console.error('Failed to load settings', err);
+      setLoadError(err instanceof Error ? err.message : 'Could not load platform diagnostics');
     } finally {
       setLoading(false);
     }
@@ -84,9 +83,9 @@ export default function Settings() {
       localStorage.removeItem('pcapman_clearance');
       localStorage.removeItem('pcapman_hash_algo');
       localStorage.removeItem('pcapman_theme_accent');
-      setAnalystName('PCAP-MAN (Lead Forensic Specialist)');
-      setOrganization('REVA University — Cyber Forensics Lab');
-      setClearance('Level 3 — Certified Threat Hunter');
+      setAnalystName('');
+      setOrganization('');
+      setClearance('');
       setHashAlgo('SHA-256');
       setThemeAccent('cyan');
       setSaveSuccess(true);
@@ -117,7 +116,7 @@ export default function Settings() {
             </span>
           </div>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '4px', maxWidth: '640px' }}>
-            Configure PCAP-MAN runtime parameters, FastAPI backend endpoints, TShark binary hooks, forensic examiner credentials, and storage ledgers.
+            View local backend diagnostics and update analyst profile and desktop preferences.
           </p>
         </div>
 
@@ -167,6 +166,7 @@ export default function Settings() {
         </div>
       </div>
 
+      {loadError && <div role="alert" style={{ color: '#fca5a5', fontSize: '13px' }}>{loadError}</div>}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
           Reading platform diagnostics...
@@ -198,7 +198,7 @@ export default function Settings() {
                 <input
                   type="text"
                   readOnly
-                  value="http://localhost:8000"
+                  value={API_BASE}
                   style={{
                     flex: 1,
                     backgroundColor: '#0b0f19',
@@ -251,37 +251,24 @@ export default function Settings() {
               }} />
               <div style={{ fontSize: '12px' }}>
                 <div style={{ color: connectionStatus === 'online' ? '#34d399' : '#fbbf24', fontWeight: 600 }}>
-                  {connectionStatus === 'online' ? 'FastAPI Engine Connected' : 'Engine Offline / Fallback Active'}
+                  {connectionStatus === 'online' ? 'FastAPI Engine Connected' : 'Backend Offline'}
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '2px' }}>
-                  Uptime active • Response latency ~2ms
+                  Backend health check completed
                 </div>
               </div>
             </div>
 
-            {/* TShark Configuration */}
+            {/* Packet parser diagnostics */}
             <div>
               <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
-                Wireshark / TShark Binary Path
+                Packet Analysis Engine
               </label>
-              <input
-                type="text"
-                placeholder="/usr/local/bin/tshark or auto-detected"
-                value={tsharkCustomPath || settingsData?.tshark_binary_path || ''}
-                onChange={(e) => setTsharkCustomPath(e.target.value)}
-                style={{
-                  width: '100%',
-                  backgroundColor: '#0b0f19',
-                  border: '1px solid #334155',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                  color: '#cbd5e1',
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                }}
-              />
+              <div style={{ backgroundColor: '#0b0f19', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#cbd5e1', fontFamily: 'monospace', fontSize: '12px' }}>
+                {settingsData?.tshark_detected ? settingsData.tshark_binary_path : 'Scapy streaming parser (PCAP / PCAPNG)'}
+              </div>
               <p style={{ color: '#64748b', fontSize: '11px', margin: '6px 0 0 0' }}>
-                If TShark is not present, PCAP-MAN transparently falls back to its built-in pure Python packet dissection engine.
+                Packet records are read incrementally by the local analysis backend.
               </p>
             </div>
           </div>
@@ -382,7 +369,7 @@ export default function Settings() {
             </div>
 
             <div>
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Immutable Evidence Directory</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '4px' }}>Evidence Directory</div>
               <div style={{
                 backgroundColor: '#0b0f19',
                 border: '1px solid #1f2937',
@@ -411,7 +398,7 @@ export default function Settings() {
                 display: 'flex',
                 justifyContent: 'space-between',
               }}>
-                <span>pcapman.db</span>
+                <span style={{ wordBreak: 'break-all' }}>{settingsData?.database_path || 'Unavailable'}</span>
                 <span style={{ color: 'var(--color-terminal)' }}>
                   {settingsData ? (settingsData.database_size_bytes / 1024).toFixed(1) : 0} KB
                 </span>
@@ -463,14 +450,14 @@ export default function Settings() {
               <div style={{ backgroundColor: '#0b0f19', padding: '10px 12px', borderRadius: '8px' }}>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>Operating System</div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', marginTop: '2px' }}>
-                  {settingsData?.os_platform.split(' ')[0]} (macOS)
+                  {settingsData?.os_platform || 'Unavailable'}
                 </div>
               </div>
 
               <div style={{ backgroundColor: '#0b0f19', padding: '10px 12px', borderRadius: '8px' }}>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>CPU Hardware</div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc', marginTop: '2px' }}>
-                  Apple Silicon ({settingsData?.cpu_count} Cores)
+                  {settingsData?.cpu_count} logical CPUs
                 </div>
               </div>
 

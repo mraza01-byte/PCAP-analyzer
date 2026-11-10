@@ -12,10 +12,10 @@ import {
   FileCode,
   Activity,
   Layers,
-  Sparkles,
   ExternalLink,
 } from 'lucide-react';
 import {
+  API_BASE,
   getCaptures,
   uploadCapture,
   deleteCapture,
@@ -29,6 +29,7 @@ export default function Captures() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState('');
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'analyzed'>('all');
@@ -41,10 +42,16 @@ export default function Captures() {
   // Load data
   const loadData = async () => {
     setLoading(true);
-    const [status, data] = await Promise.all([probeBackend(), getCaptures()]);
-    setBackendStatus(status);
-    setCaptures(data);
-    setLoading(false);
+    setErrorMessage('');
+    try {
+      const [status, data] = await Promise.all([probeBackend(), getCaptures()]);
+      setBackendStatus(status);
+      setCaptures(data);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Could not load captures');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -63,20 +70,26 @@ export default function Captures() {
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
+    setErrorMessage('');
     setUploading(true);
     setUploadProgress(`Ingesting ${file.name} & computing SHA-256...`);
 
     try {
-      const newRec = await uploadCapture(file);
+      const newRec = await uploadCapture(file, (percent) => {
+        setUploadProgress(percent === 100 ? 'Upload complete; analyzing capture...' : `Uploading ${file.name} (${percent}%)...`);
+      });
       setCaptures((prev) => [newRec, ...prev.filter((c) => c.id !== newRec.id)]);
-      setUploadProgress('Chain of custody verified!');
+      setUploadProgress('Evidence saved and analysis complete.');
       setTimeout(() => {
         setUploading(false);
         setUploadProgress('');
       }, 1200);
     } catch (err) {
       console.error(err);
-      setUploadProgress('Upload failed');
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      await loadData();
+      setErrorMessage(message);
+      setUploadProgress(message);
       setTimeout(() => setUploading(false), 2000);
     }
   };
@@ -89,43 +102,15 @@ export default function Captures() {
     }
   };
 
-  const handleDelete = async (id: number, e: React.MouseEvent) => {
+  const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Delete this evidence record? Chain of custody log will record removal.')) {
+    if (confirm('Delete this evidence and its derived analysis records?')) {
       await deleteCapture(id);
       setCaptures((prev) => prev.filter((c) => c.id !== id));
       if (selectedCapture?.id === id) {
         setSelectedCapture(null);
       }
     }
-  };
-
-  // Demo PCAP generator for quick viva/presentation evaluation
-  const handleLoadDemoCapture = async () => {
-    setUploading(true);
-    setUploadProgress('Synthesizing sample PCAP evidence (TLS/DNS/HTTP telemetry)...');
-
-    // Synthetic standard PCAP binary with magic bytes \xd4\xc3\xb2\xa1
-    const pcapHeader = new Uint8Array([
-      0xd4, 0xc3, 0xb2, 0xa1, // Magic number
-      0x02, 0x00, 0x04, 0x00, // Version 2.4
-      0x00, 0x00, 0x00, 0x00, // GMT to local correction
-      0x00, 0x00, 0x00, 0x00, // Accuracy of timestamps
-      0x00, 0x00, 0x04, 0x00, // Max packet snapshot length (262144)
-      0x01, 0x00, 0x00, 0x00, // Data link type: Ethernet (1)
-    ]);
-
-    // Simulated payload
-    const demoPayload = new Uint8Array(184200);
-    for (let i = 0; i < demoPayload.length; i++) {
-      demoPayload[i] = (i * 31 + 17) % 256;
-    }
-
-    const blob = new Blob([pcapHeader, demoPayload], { type: 'application/vnd.tcpdump.pcap' });
-    const filename = `apt29_c2_traffic_sample_${Date.now().toString().slice(-4)}.pcap`;
-    const demoFile = new File([blob], filename, { type: 'application/vnd.tcpdump.pcap' });
-
-    await handleFileUpload(demoFile);
   };
 
   const filteredCaptures = captures.filter((cap) => {
@@ -163,7 +148,7 @@ export default function Captures() {
             </span>
           </div>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '4px', maxWidth: '640px' }}>
-            Import raw network packet captures (PCAP, PCAPNG). Automatically computes immutable SHA-256 cryptographic hashes for forensic chain-of-custody and prepares packet flow records.
+            Import raw PCAP and PCAPNG evidence. SHA-256 fingerprints and parsed hosts, flows, and packet-time events are stored locally.
           </p>
         </div>
 
@@ -187,12 +172,12 @@ export default function Captures() {
               boxShadow: backendStatus === 'online' ? '0 0 10px #10b981' : 'none',
             }} />
             <span style={{ color: '#e2e8f0', fontWeight: 500 }}>
-              {backendStatus === 'online' ? 'FastAPI Core Engine Connected' : 'Local Ledger Fallback Mode'}
+              {backendStatus === 'online' ? 'FastAPI Analysis Engine Connected' : 'Backend Offline'}
             </span>
           </div>
 
           <a
-            href="http://localhost:8000/docs"
+            href={`${API_BASE}/docs`}
             target="_blank"
             rel="noreferrer"
             style={{
@@ -258,14 +243,14 @@ export default function Captures() {
 
         <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '12px', padding: '16px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>Integrity Status</span>
+            <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>Evidence Fingerprint</span>
             <ShieldCheck size={18} style={{ color: '#10b981' }} />
           </div>
           <div style={{ fontSize: '22px', fontWeight: 700, color: '#10b981', marginTop: '8px' }}>
-            100% SHA-256
+            SHA-256 recorded
           </div>
           <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-            Zero evidence tampering
+            Fingerprint computed at import
           </div>
         </div>
       </div>
@@ -320,7 +305,7 @@ export default function Captures() {
               Drag & Drop PCAP or PCAPNG Evidence Files
             </h3>
             <p style={{ color: '#94a3b8', fontSize: '13px', margin: 0 }}>
-              Supports standard libpcap, pcapng, nanosecond captures. Hash verification runs automatically on ingestion.
+              Supports standard libpcap and PCAPNG files. SHA-256 fingerprints are recorded during upload.
             </p>
           </div>
 
@@ -347,26 +332,6 @@ export default function Captures() {
               <span>{uploading ? 'Processing File...' : 'Browse PCAP File'}</span>
             </button>
 
-            <button
-              onClick={handleLoadDemoCapture}
-              disabled={uploading}
-              style={{
-                backgroundColor: '#1e293b',
-                color: '#cbd5e1',
-                border: '1px solid #334155',
-                fontWeight: 500,
-                fontSize: '13px',
-                padding: '9px 16px',
-                borderRadius: '8px',
-                cursor: uploading ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Sparkles size={16} style={{ color: '#f59e0b' }} />
-              <span>Generate Sample Evidence (Demo)</span>
-            </button>
           </div>
 
           {uploading && (
@@ -388,6 +353,7 @@ export default function Captures() {
 
       {/* Evidence Ledger Section */}
       <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '12px', padding: '20px' }}>
+        {errorMessage && <p role="alert" style={{ color: '#fca5a5', fontSize: '13px' }}>{errorMessage}</p>}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
@@ -480,24 +446,9 @@ export default function Captures() {
           }}>
             <FileCode size={36} style={{ color: '#475569', marginBottom: '12px' }} />
             <h4 style={{ color: '#cbd5e1', fontSize: '15px', margin: '0 0 6px 0' }}>No Evidence Captures Found</h4>
-            <p style={{ color: '#64748b', fontSize: '13px', maxWidth: '420px', margin: '0 auto 16px auto' }}>
-              Upload your first network packet capture using the dropzone above, or click below to generate a realistic sample capture.
+            <p style={{ color: '#64748b', fontSize: '13px', maxWidth: '420px', margin: '0 auto' }}>
+              Upload a PCAP or PCAPNG file to create the first evidence record.
             </p>
-            <button
-              onClick={handleLoadDemoCapture}
-              style={{
-                backgroundColor: 'rgba(6, 182, 212, 0.1)',
-                border: '1px solid rgba(6, 182, 212, 0.3)',
-                color: 'var(--color-cyan)',
-                borderRadius: '8px',
-                padding: '8px 16px',
-                fontSize: '13px',
-                cursor: 'pointer',
-                fontWeight: 500,
-              }}
-            >
-              Generate Demo PCAP
-            </button>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -511,95 +462,35 @@ export default function Captures() {
                   <th style={{ padding: '10px 12px' }}>Flows</th>
                   <th style={{ padding: '10px 12px' }}>Size</th>
                   <th style={{ padding: '10px 12px' }}>Registered</th>
+                  <th style={{ padding: '10px 12px' }}>Status</th>
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredCaptures.map((cap) => (
-                  <tr
-                    key={cap.id}
-                    onClick={() => setSelectedCapture(cap)}
-                    style={{
-                      borderBottom: '1px solid rgba(31, 41, 55, 0.6)',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.15s',
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.02)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
+                  <tr key={cap.id} onClick={() => setSelectedCapture(cap)} style={{ borderBottom: '1px solid #1f2937', cursor: 'pointer' }}>
                     <td style={{ padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileCheck size={16} style={{ color: 'var(--color-terminal)' }} />
                         <span style={{ fontWeight: 600, color: '#f8fafc' }}>{cap.filename}</span>
                       </div>
-                    </td>
-                    <td style={{ padding: '12px' }}>
-                      <span style={{
-                        fontSize: '11px',
-                        fontFamily: 'monospace',
-                        textTransform: 'uppercase',
-                        backgroundColor: '#1e293b',
-                        color: '#94a3b8',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                      }}>
-                        {cap.file_type}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <code style={{
-                          fontFamily: 'monospace',
-                          fontSize: '11px',
-                          color: 'var(--color-cyan)',
-                          backgroundColor: '#0b0f19',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                        }}>
+                        <code style={{ fontFamily: 'monospace', fontSize: '11px', color: 'var(--color-cyan)', backgroundColor: '#0b0f19', padding: '2px 6px', borderRadius: '4px' }}>
                           {cap.sha256.slice(0, 10)}...{cap.sha256.slice(-6)}
                         </code>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopyHash(cap.sha256);
-                          }}
-                          title="Copy full SHA-256"
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: copiedHash === cap.sha256 ? '#10b981' : '#64748b',
-                            cursor: 'pointer',
-                            padding: '2px',
-                          }}
-                        >
+                        <button onClick={(e) => { e.stopPropagation(); handleCopyHash(cap.sha256); }} title="Copy full SHA-256" style={{ background: 'transparent', border: 'none', color: copiedHash === cap.sha256 ? '#10b981' : '#64748b', cursor: 'pointer', padding: '2px' }}>
                           {copiedHash === cap.sha256 ? <Check size={13} /> : <Copy size={13} />}
                         </button>
                       </div>
                     </td>
-                    <td style={{ padding: '12px', color: '#cbd5e1' }}>
-                      {cap.packet_count.toLocaleString()}
-                    </td>
-                    <td style={{ padding: '12px', color: '#cbd5e1' }}>
-                      {cap.flow_count.toLocaleString()}
-                    </td>
-                    <td style={{ padding: '12px', color: '#94a3b8' }}>
-                      {(cap.file_size_bytes / 1024).toFixed(1)} KB
-                    </td>
-                    <td style={{ padding: '12px', color: '#64748b', fontSize: '12px' }}>
-                      {new Date(cap.created_at).toLocaleTimeString()}
-                    </td>
+                    <td style={{ padding: '12px', color: '#cbd5e1' }}>{cap.file_type}</td>
+                    <td style={{ padding: '12px', color: '#cbd5e1' }}>{cap.packet_count.toLocaleString()}</td>
+                    <td style={{ padding: '12px', color: '#cbd5e1' }}>{cap.flow_count.toLocaleString()}</td>
+                    <td style={{ padding: '12px', color: '#94a3b8' }}>{(cap.file_size_bytes / 1024).toFixed(1)} KB</td>
+                    <td style={{ padding: '12px', color: '#64748b', fontSize: '12px' }}>{new Date(cap.created_at).toLocaleTimeString()}</td>
+                    <td style={{ padding: '12px', color: '#cbd5e1' }}>{cap.status}</td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
-                      <button
-                        onClick={(e) => handleDelete(cap.id, e)}
-                        title="Delete capture"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          padding: '4px',
-                        }}
-                      >
+                      <button onClick={(e) => handleDelete(cap.id, e)} title="Delete capture" style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}>
                         <Trash2 size={15} />
                       </button>
                     </td>

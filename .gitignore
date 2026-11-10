@@ -1,0 +1,6 @@
+
+# Local databases and generated metadata
+*.db
+*.sqlite
+*.sqlite3
+*.egg-info/

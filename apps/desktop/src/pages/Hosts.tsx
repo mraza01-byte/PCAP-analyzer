@@ -2,10 +2,8 @@ import { useState, useEffect } from 'react';
 import {
   Globe,
   Search,
-  ShieldAlert,
   Server,
   Laptop,
-  Radio,
   RefreshCw,
   HardDrive,
   Copy,
@@ -16,17 +14,20 @@ import { getHosts, type HostRecord } from '../services/api';
 export default function Hosts() {
   const [hosts, setHosts] = useState<HostRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedHost, setSelectedHost] = useState<HostRecord | null>(null);
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
 
   const fetchHostsData = async () => {
     setLoading(true);
+    setErrorMessage('');
     try {
       const res = await getHosts(searchTerm || undefined);
       setHosts(res.hosts);
     } catch (err) {
       console.error('Failed to load hosts', err);
+      setErrorMessage(err instanceof Error ? err.message : 'Could not load hosts');
     } finally {
       setLoading(false);
     }
@@ -49,7 +50,7 @@ export default function Hosts() {
 
   const totalPackets = hosts.reduce((acc, h) => acc + h.packet_count, 0);
   const totalBytes = hosts.reduce((acc, h) => acc + h.bytes_total, 0);
-  const highRiskHosts = hosts.filter((h) => (h.risk_score || 0) >= 70);
+  const hostsWithServices = hosts.filter((host) => host.open_ports.length > 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -74,7 +75,7 @@ export default function Hosts() {
             </span>
           </div>
           <p style={{ color: '#94a3b8', fontSize: '14px', marginTop: '4px', maxWidth: '640px' }}>
-            Automatic endpoint profiling from PCAP conversations. Identifies active internal workstations, network gateways, open service ports, and suspicious external threat nodes.
+            Endpoints and observed network services derived from the analyzed capture traffic.
           </p>
         </div>
 
@@ -89,10 +90,10 @@ export default function Hosts() {
           </div>
 
           <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={16} style={{ color: '#ef4444' }} />
+            <Server size={16} style={{ color: 'var(--color-cyan)' }} />
             <div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>High Risk Nodes</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#f87171' }}>{highRiskHosts.length}</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Hosts with Observed Services</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>{hostsWithServices.length}</div>
             </div>
           </div>
 
@@ -182,7 +183,9 @@ export default function Hosts() {
       </div>
 
       {/* Host Cards Grid */}
-      {loading ? (
+      {errorMessage ? (
+        <div role="alert" style={{ textAlign: 'center', padding: '48px', color: '#fca5a5' }}>{errorMessage}</div>
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
           Analyzing endpoint footprints...
         </div>
@@ -194,38 +197,32 @@ export default function Hosts() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
           {hosts.map((host) => {
-            const risk = host.risk_score || 0;
-            const isHighRisk = risk >= 70;
-            const isMediumRisk = risk >= 30 && risk < 70;
-
             return (
               <div
                 key={host.ip}
                 onClick={() => setSelectedHost(host)}
                 style={{
                   backgroundColor: '#111827',
-                  border: `1px solid ${isHighRisk ? 'rgba(239, 68, 68, 0.4)' : '#1f2937'}`,
+                  border: '1px solid #1f2937',
                   borderRadius: '12px',
                   padding: '18px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
-                  boxShadow: isHighRisk ? '0 0 15px rgba(239, 68, 68, 0.08)' : 'none',
+                  boxShadow: 'none',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = isHighRisk ? '#ef4444' : 'var(--color-cyan)';
+                  e.currentTarget.style.borderColor = 'var(--color-cyan)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = isHighRisk ? 'rgba(239, 68, 68, 0.4)' : '#1f2937';
+                  e.currentTarget.style.borderColor = '#1f2937';
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
                 {/* Top Row: IP & Threat Badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isHighRisk ? (
-                      <Radio size={18} style={{ color: '#ef4444' }} />
-                    ) : host.role.toLowerCase().includes('gateway') ? (
+                    {host.role.toLowerCase().includes('gateway') ? (
                       <Server size={18} style={{ color: 'var(--color-cyan)' }} />
                     ) : (
                       <Laptop size={18} style={{ color: '#38bdf8' }} />
@@ -257,23 +254,23 @@ export default function Hosts() {
                     </div>
                   </div>
 
-                  {/* Risk Badge */}
+                  {/* Assessment state */}
                   <span style={{
                     fontSize: '11px',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     padding: '3px 8px',
                     borderRadius: '6px',
-                    backgroundColor: isHighRisk ? 'rgba(239, 68, 68, 0.15)' : isMediumRisk ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                    color: isHighRisk ? '#f87171' : isMediumRisk ? '#fbbf24' : '#34d399',
-                    border: `1px solid ${isHighRisk ? 'rgba(239, 68, 68, 0.3)' : isMediumRisk ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+                    backgroundColor: '#0b0f19',
+                    color: '#94a3b8',
+                    border: '1px solid #334155',
                   }}>
-                    Risk: {risk}/100
+                    Not assessed
                   </span>
                 </div>
 
                 {/* Hostname & Role */}
                 <div style={{ marginTop: '12px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: isHighRisk ? '#fca5a5' : '#cbd5e1' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#cbd5e1' }}>
                     {host.hostname}
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '2px' }}>
@@ -420,20 +417,18 @@ export default function Hosts() {
 
               {/* Assessment */}
               <div style={{
-                backgroundColor: (selectedHost.risk_score || 0) >= 70 ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
-                border: `1px solid ${(selectedHost.risk_score || 0) >= 70 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)'}`,
+                backgroundColor: '#0b0f19',
+                border: '1px solid #334155',
                 borderRadius: '8px',
                 padding: '12px',
                 fontSize: '13px',
-                color: (selectedHost.risk_score || 0) >= 70 ? '#fca5a5' : '#34d399',
+                color: '#cbd5e1',
               }}>
                 <div style={{ fontWeight: 600, marginBottom: '2px' }}>
-                  Forensic Assessment: {selectedHost.role}
+                  Observed Endpoint: {selectedHost.role}
                 </div>
                 <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                  {(selectedHost.risk_score || 0) >= 70
-                    ? 'Beaconing traffic patterns detected. Potential Command & Control channel or unauthorized data staging point.'
-                    : 'Standard enterprise operational profile. Normal DNS resolution and outbound encrypted web traffic.'}
+                  {selectedHost.packet_count} packets and {(selectedHost.bytes_sent + selectedHost.bytes_received).toLocaleString()} observed bytes in this capture. Threat reputation has not been assessed.
                 </div>
               </div>
             </div>
