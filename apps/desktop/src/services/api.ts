@@ -4,7 +4,7 @@
  * Uses the local FastAPI service as the source of truth.
  */
 
-export const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
+export const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000';
 
 // ── Response Types ─────────────────────────────────────────────
 
@@ -56,8 +56,8 @@ export interface FlowRecord {
   bytes_total: number;
   bytes_forward: number;
   bytes_reverse: number;
-  start_time: string;
-  end_time: string;
+  start_time: string | null;
+  end_time: string | null;
   tcp_flags: string;
   summary: string;
   capture_filename?: string;
@@ -75,8 +75,8 @@ export interface HostRecord {
   bytes_received: number;
   packet_count: number;
   risk_score?: number;
-  first_seen: string;
-  last_seen: string;
+  first_seen: string | null;
+  last_seen: string | null;
 }
 
 export interface TimelineEventRecord {
@@ -226,11 +226,13 @@ export async function deleteCapture(id: string): Promise<void> {
 export async function getFlows(params?: {
   protocol?: string;
   search?: string;
+  captureId?: string;
   limit?: number;
 }): Promise<{ total: number; flows: FlowRecord[] }> {
   const query = new URLSearchParams();
   if (params?.protocol) query.set('protocol', params.protocol);
   if (params?.search) query.set('search', params.search);
+  if (params?.captureId) query.set('capture_id', params.captureId);
   if (params?.limit) query.set('limit', String(params.limit));
   const path = `/api/v1/flows${query.toString() ? `?${query.toString()}` : ''}`;
   return apiFetch<{ total: number; flows: FlowRecord[] }>(path);
@@ -248,9 +250,12 @@ export async function getFlowDetail(id: string): Promise<FlowRecord> {
  * Fetch discovered host profiles.
  * GET /api/v1/hosts
  */
-export async function getHosts(search?: string): Promise<{ total: number; hosts: HostRecord[] }> {
-  const query = search ? `?search=${encodeURIComponent(search)}` : '';
-  return apiFetch<{ total: number; hosts: HostRecord[] }>(`/api/v1/hosts${query}`);
+export async function getHosts(search?: string, captureId?: string): Promise<{ total: number; hosts: HostRecord[] }> {
+  const query = new URLSearchParams();
+  if (search) query.set('search', search);
+  if (captureId) query.set('capture_id', captureId);
+  const path = `/api/v1/hosts${query.toString() ? `?${query.toString()}` : ''}`;
+  return apiFetch<{ total: number; hosts: HostRecord[] }>(path);
 }
 
 /**
@@ -261,11 +266,13 @@ export async function getTimelineEvents(params?: {
   category?: string;
   severity?: string;
   search?: string;
+  captureId?: string;
 }): Promise<{ total: number; events: TimelineEventRecord[] }> {
   const query = new URLSearchParams();
   if (params?.category) query.set('category', params.category);
   if (params?.severity) query.set('severity', params.severity);
   if (params?.search) query.set('search', params.search);
+  if (params?.captureId) query.set('capture_id', params.captureId);
   const path = `/api/v1/timeline${query.toString() ? `?${query.toString()}` : ''}`;
   return apiFetch<{ total: number; events: TimelineEventRecord[] }>(path);
 }
@@ -371,5 +378,4 @@ export async function generateBriefingReport(caseId?: string): Promise<BriefingR
   const query = caseId ? `?case_id=${encodeURIComponent(caseId)}` : '';
   return apiFetch<BriefingReportRecord>(`/api/v1/briefings/generate${query}`);
 }
-
 

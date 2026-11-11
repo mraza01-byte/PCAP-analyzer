@@ -43,10 +43,12 @@ class Capture(IdTimestampMixin, Base):
     first_packet_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     last_packet_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     error_message: Mapped[str | None] = mapped_column(String(2000))
+    processing_token: Mapped[str | None] = mapped_column(String(36))
+    processing_lease_expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     hosts: Mapped[list["Host"]] = relationship(back_populates="capture", cascade="all, delete-orphan", passive_deletes=True)
     flows: Mapped[list["Flow"]] = relationship(back_populates="capture", cascade="all, delete-orphan", passive_deletes=True)
     timeline_events: Mapped[list["TimelineEvent"]] = relationship(back_populates="capture", cascade="all, delete-orphan", passive_deletes=True)
     investigations: Mapped[list["Investigation"]] = relationship(secondary="investigation_captures", back_populates="captures")
 
-    __table_args__ = (Index("ix_captures_sha256", "sha256"),)
+    __table_args__ = (Index("ix_captures_sha256", "sha256", unique=True),)

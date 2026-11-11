@@ -12,6 +12,7 @@ from app.models.mixins import IdTimestampMixin
 class InvestigationStatus(str, enum.Enum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"
+    ESCALATED = "escalated"
     CLOSED = "closed"
 
 

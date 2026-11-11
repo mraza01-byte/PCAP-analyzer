@@ -403,14 +403,18 @@ export default function Hosts() {
                 <div style={{ backgroundColor: '#0b0f19', padding: '12px', borderRadius: '8px' }}>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>First Observed</div>
                   <div style={{ color: '#cbd5e1', fontSize: '12px', marginTop: '2px' }}>
-                    {new Date(selectedHost.first_seen).toLocaleTimeString()}
+                    {selectedHost.first_seen
+                      ? new Date(selectedHost.first_seen).toLocaleTimeString()
+                      : 'Not available'}
                   </div>
                 </div>
 
                 <div style={{ backgroundColor: '#0b0f19', padding: '12px', borderRadius: '8px' }}>
                   <div style={{ fontSize: '11px', color: '#64748b' }}>Last Activity</div>
                   <div style={{ color: '#cbd5e1', fontSize: '12px', marginTop: '2px' }}>
-                    {new Date(selectedHost.last_seen).toLocaleTimeString()}
+                    {selectedHost.last_seen
+                      ? new Date(selectedHost.last_seen).toLocaleTimeString()
+                      : 'Not available'}
                   </div>
                 </div>
               </div>

@@ -19,13 +19,13 @@ the existing Scapy-based engine; the API does not provide synthetic analysis res
 | `GET /health` | `{"status":"healthy","application":"PCAP-MAN"}`. Returns **503** if the database cannot be reached. |
 | `GET /api/v1/stats` | `{"captures":n,"hosts":n,"flows":n,"investigations":n}` (real row counts) |
 | `GET /api/v1/captures` | `[CaptureRecord, ...]` |
-| `POST /api/v1/captures/upload` | Multipart field `file`; streams and validates PCAP/PCAPNG, stores evidence, analyzes it, and returns metadata and analysis status |
+| `POST /api/v1/captures/upload` | Multipart field `file`; streams and validates PCAP/PCAPNG, stores evidence, analyzes it, and returns metadata and analysis status. A new capture returns **201**; a duplicate or retry of a failed capture returns **200** when it completes. |
 | `GET /api/v1/captures/{id}` | Capture metadata and current status |
 | `DELETE /api/v1/captures/{id}` | Deletes a capture, its derived rows, and its stored evidence |
-| `GET /api/v1/hosts?search=&limit=` | `{"total":n,"hosts":[HostOut, ...]}` |
-| `GET /api/v1/flows?protocol=&search=&limit=` | `{"total":n,"flows":[FlowOut, ...]}` |
+| `GET /api/v1/hosts?search=&capture_id=&limit=` | `{"total":n,"hosts":[HostOut, ...]}` |
+| `GET /api/v1/flows?protocol=&search=&capture_id=&limit=` | `{"total":n,"flows":[FlowOut, ...]}` |
 | `GET /api/v1/flows/{id}` | One persisted flow with endpoint and byte-count details |
-| `GET /api/v1/timeline?search=&severity=&category=&limit=` | `{"total":n,"events":[TimelineEventOut, ...]}` |
+| `GET /api/v1/timeline?search=&severity=&category=&capture_id=&limit=` | `{"total":n,"events":[TimelineEventOut, ...]}` |
 | `GET /api/v1/investigations` | `[InvestigationOut, ...]` |
 | `POST /api/v1/investigations` | Create a case and optionally link capture UUIDs |
 | `PATCH /api/v1/investigations/{id}` | Update case metadata, notes, or status |
@@ -35,6 +35,8 @@ the existing Scapy-based engine; the API does not provide synthetic analysis res
 
 Capture, host, flow, timeline, and investigation response shapes match the desktop service types.
 Database storage names and relationships are documented in `DATABASE.md`.
+Host, flow, and timeline lists accept `capture_id` to restrict results to one capture.
+Timeline event severity is currently `info`; the analyzer does not assign threat severity.
 
 ## Upload behaviour
 
