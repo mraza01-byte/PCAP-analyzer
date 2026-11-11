@@ -4,6 +4,7 @@ from fastapi import FastAPI, UploadFile, File
 
 from database import conn
 from services.hashing import sha256_file
+from services.host_discovery import discover_hosts
 
 app = FastAPI(title="PCAP-MAN Engine")
 
@@ -55,6 +56,8 @@ async def upload(file: UploadFile = File(...)):
 
     conn.commit()
 
+    discover_hosts(str(file_path))
+
     return {
         "id": cursor.lastrowid,
         "filename": file.filename,
@@ -84,3 +87,64 @@ def get_captures():
         }
         for row in rows
     ]
+
+
+@app.get("/hosts")
+def get_hosts():
+    cursor = conn.execute(
+        """
+        SELECT
+            id,
+            ip,
+            packet_count,
+            first_seen,
+            last_seen
+        FROM hosts
+        ORDER BY packet_count DESC
+        """
+    )
+
+    rows = cursor.fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "ip": row[1],
+            "packet_count": row[2],
+            "first_seen": row[3],
+            "last_seen": row[4],
+        }
+        for row in rows
+    ]
+
+
+@app.get("/hosts/{ip}")
+def get_host(ip: str):
+    cursor = conn.execute(
+        """
+        SELECT
+            id,
+            ip,
+            packet_count,
+            first_seen,
+            last_seen
+        FROM hosts
+        WHERE ip = ?
+        """,
+        (ip,),
+    )
+
+    row = cursor.fetchone()
+
+    if not row:
+        return {
+            "error": "host_not_found"
+        }
+
+    return {
+        "id": row[0],
+        "ip": row[1],
+        "packet_count": row[2],
+        "first_seen": row[3],
+        "last_seen": row[4],
+    }
