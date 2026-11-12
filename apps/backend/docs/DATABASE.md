@@ -150,7 +150,7 @@ An Investigation is never deleted just because a Capture was removed.
 
 | Table | Index | Why |
 | --- | --- | --- |
-| captures | `sha256` | Find duplicate imports / verify evidence |
+| captures | unique `sha256` | Atomically prevent duplicate imports across backend workers |
 | hosts | `capture_id`, `ip_address`; unique (`capture_id`, `ip_address`) | List hosts of a capture, look up an IP |
 | flows | (`capture_id`, `start_time`), `src_host_id`, `dst_host_id`, `protocol` | Browse a capture's flows in time order, find a host's flows, filter by protocol |
 | investigations | `status` | Filter open/closed cases |
@@ -183,3 +183,29 @@ alembic downgrade base    # undo everything (empty database)
 After changing a model, create a new migration with
 `alembic revision --autogenerate -m "short description"`, read the generated file, then commit it.
 The default database file is `apps/backend/data/pcapman.db` (never committed).
+
+Capture upload claims are guarded by a unique SHA-256 index, and retrying a failed
+capture uses a conditional database update from `failed` to `processing`. These
+guards work across backend processes. SQLite serializes writes database-wide;
+the upload claim uses `BEGIN IMMEDIATE` and waits up to 30 seconds for SQLite's
+write lock. This prevents competing claims but limits concurrent write throughput.
+Processing captures also carry a database-backed ownership token and renewable
+lease. Workers renew the lease every 30 seconds, with a 120-second initial
+duration. A later upload can reclaim a processing capture only when its lease
+has expired (or is absent, as with a legacy/incomplete row); all renewal,
+failure, and result-persistence updates are fenced by the ownership token. This
+allows recovery after worker termination without reclaiming a live worker merely
+because analysis is taking a long time. Workers sharing a database must have
+reasonably synchronized UTC clocks; clock skew can cause premature or delayed
+recovery. SQLite still serializes writes, so lease renewal and uploads contend
+for the same database-wide write lock.
+The analyzer streams packets synchronously in a worker thread and checks the
+ownership-loss signal between packets and during result normalization. This
+cooperatively stops stale analysis at the next check; Python cannot forcibly
+interrupt Scapy while it is reading or decoding an individual packet. Hard
+process termination would require running analysis in a separately managed
+process.
+The uniqueness migration stops with an explicit error if legacy duplicate fingerprints
+already exist; resolve those records before upgrading rather than silently deleting evidence.
+A client/server database with row-level locking can provide higher write concurrency when
+its driver is installed and configured.

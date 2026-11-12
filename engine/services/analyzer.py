@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -5,6 +6,10 @@ from scapy.all import Ether, IP, IPv6, TCP, UDP, PcapReader
 
 
 class CaptureAnalysisError(ValueError):
+    pass
+
+
+class CaptureAnalysisCancelled(Exception):
     pass
 
 
@@ -18,8 +23,9 @@ def detect_capture_format(path: str | Path) -> str:
     raise CaptureAnalysisError("File header is not a PCAP or PCAPNG capture")
 
 
-def analyze_capture(path: str | Path) -> dict:
+def analyze_capture(path: str | Path, is_cancelled: Callable[[], bool] | None = None) -> dict:
     """Stream a capture and return normalized hosts, flows, and packet-time events."""
+    _raise_if_cancelled(is_cancelled)
     file_format = detect_capture_format(path)
     hosts: dict[str, dict] = {}
     flows: dict[tuple, dict] = {}
@@ -28,6 +34,7 @@ def analyze_capture(path: str | Path) -> dict:
     try:
         with PcapReader(str(path)) as reader:
             for packet in reader:
+                _raise_if_cancelled(is_cancelled)
                 packet_count += 1
                 if packet.haslayer(IP):
                     network = packet[IP]
@@ -103,14 +110,16 @@ def analyze_capture(path: str | Path) -> dict:
                     flow["bytes_reverse"] += packet_bytes
                 if packet.haslayer(TCP):
                     flow["tcp_flags"].update(_tcp_flag_names(int(packet[TCP].flags)))
-    except CaptureAnalysisError:
+    except (CaptureAnalysisCancelled, CaptureAnalysisError):
         raise
     except Exception as error:
         raise CaptureAnalysisError(f"Unable to parse capture: {error}") from error
 
+    _raise_if_cancelled(is_cancelled)
     normalized_flows = []
     timeline = []
     for flow in flows.values():
+        _raise_if_cancelled(is_cancelled)
         flag_order = ("FIN", "SYN", "RST", "PSH", "ACK", "URG", "ECE", "CWR")
         flow["tcp_flags"] = "/".join(flag for flag in flag_order if flag in flow["tcp_flags"]) or "-"
         flow["flow_key"] = (
@@ -136,8 +145,10 @@ def analyze_capture(path: str | Path) -> dict:
             })
 
     for host in hosts.values():
+        _raise_if_cancelled(is_cancelled)
         host["open_ports"] = sorted(host["open_ports"])
 
+    _raise_if_cancelled(is_cancelled)
     return {
         "file_format": file_format,
         "packet_count": packet_count,
@@ -147,6 +158,11 @@ def analyze_capture(path: str | Path) -> dict:
         "flows": normalized_flows,
         "timeline_events": timeline,
     }
+
+
+def _raise_if_cancelled(is_cancelled: Callable[[], bool] | None) -> None:
+    if is_cancelled and is_cancelled():
+        raise CaptureAnalysisCancelled("Capture analysis cancelled after processing ownership was lost")
 
 
 def _application(protocol: str, *ports: int | None) -> str:

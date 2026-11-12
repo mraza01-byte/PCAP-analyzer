@@ -14,7 +14,10 @@ from app.core.config import get_settings
 @lru_cache
 def get_engine() -> Engine:
     url = get_settings().resolved_database_url
-    engine = create_engine(url, connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
+    engine = create_engine(
+        url,
+        connect_args={"check_same_thread": False, "timeout": 30} if url.startswith("sqlite") else {},
+    )
 
     if url.startswith("sqlite"):
         @event.listens_for(engine, "connect")

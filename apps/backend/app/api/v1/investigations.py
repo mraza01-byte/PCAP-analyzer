@@ -93,7 +93,7 @@ def _validate_severity(value: str) -> str:
 
 def _status_to_model(value: str) -> InvestigationStatus:
     values = {"active": InvestigationStatus.OPEN, "open": InvestigationStatus.OPEN,
-              "under_review": InvestigationStatus.IN_PROGRESS, "escalated": InvestigationStatus.IN_PROGRESS,
+              "under_review": InvestigationStatus.IN_PROGRESS, "escalated": InvestigationStatus.ESCALATED,
               "in_progress": InvestigationStatus.IN_PROGRESS, "closed": InvestigationStatus.CLOSED}
     if value not in values:
         raise HTTPException(status_code=422, detail="Unsupported investigation status")
@@ -102,6 +102,7 @@ def _status_to_model(value: str) -> InvestigationStatus:
 
 def _serialize_investigation(case: Investigation) -> dict:
     status = {InvestigationStatus.OPEN: "active", InvestigationStatus.IN_PROGRESS: "under_review",
+              InvestigationStatus.ESCALATED: "escalated",
               InvestigationStatus.CLOSED: "closed"}[case.status]
     return {
         "id": case.id,

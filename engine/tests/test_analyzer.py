@@ -1,8 +1,9 @@
 from datetime import datetime, timezone
 
+import pytest
 from scapy.all import Ether, IP, TCP, PcapNgWriter, wrpcap
 
-from engine.services.analyzer import analyze_capture
+from engine.services.analyzer import CaptureAnalysisCancelled, analyze_capture
 
 
 def _packet(timestamp):
@@ -38,3 +39,19 @@ def test_reads_pcapng_without_loading_file_as_a_blob(tmp_path):
     assert result["file_format"] == "pcapng"
     assert result["packet_count"] == 1
     assert len(result["flows"]) == 1
+
+
+def test_stops_streaming_when_processing_ownership_is_lost(tmp_path):
+    capture = tmp_path / "cancelled.pcap"
+    wrpcap(str(capture), [_packet(1_800_000_000 + index) for index in range(10)])
+    checks = 0
+
+    def ownership_lost():
+        nonlocal checks
+        checks += 1
+        return checks >= 3
+
+    with pytest.raises(CaptureAnalysisCancelled):
+        analyze_capture(capture, ownership_lost)
+
+    assert checks == 3

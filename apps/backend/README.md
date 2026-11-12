@@ -4,23 +4,29 @@ FastAPI service for PCAP-MAN. It runs on its own, separate from the desktop app.
 
 ## Setup (once)
 
-From this folder (`apps/backend`):
+From the repository root, run:
 
 ```
 python -m venv .venv
 # Windows PowerShell:  .venv\Scripts\Activate.ps1
 # Mac / Linux:         source .venv/bin/activate
-pip install -r requirements-dev.txt
+python apps/backend/install.py
 ```
+
+The installer resolves the backend and engine paths itself, so it can also be run
+from another working directory. To install manually, change to `apps/backend`
+before running `pip install -r requirements-dev.txt`.
 
 ## Run
 
 Starting the backend also creates/updates the SQLite database automatically (no separate Alembic step needed).
 
 ```
-uvicorn app.main:app --reload
+cd apps/backend
+python -m app --reload
 ```
 
+The server reads `PCAPMAN_HOST` and `PCAPMAN_PORT` from the environment or `.env`.
 Then open http://127.0.0.1:8000/health  (API docs: http://127.0.0.1:8000/docs)
 
 Expected reply: `{"status":"healthy","application":"PCAP-MAN"}`

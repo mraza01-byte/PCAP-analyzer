@@ -5,17 +5,24 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models import TimelineEvent
 from app.schemas.entities import TimelineList
+from app.api.v1.search import contains_pattern
 
 router = APIRouter(prefix="/timeline", tags=["timeline"])
 
 
 @router.get("", response_model=TimelineList)
 def list_events(search: str | None = None, severity: str | None = None, category: str | None = None,
+                capture_id: str | None = None,
                 limit: int = Query(500, ge=1, le=5000), db: Session = Depends(get_db)):
     query = select(TimelineEvent)
+    if capture_id:
+        query = query.where(TimelineEvent.capture_id == capture_id)
     if search:
-        like = f"%{search}%"
-        query = query.where(or_(TimelineEvent.title.like(like), TimelineEvent.description.like(like)))
+        pattern = contains_pattern(search)
+        query = query.where(or_(
+            TimelineEvent.title.like(pattern, escape="\\"),
+            TimelineEvent.description.like(pattern, escape="\\"),
+        ))
     if severity and severity != "info":
         query = query.where(false())
     if category:

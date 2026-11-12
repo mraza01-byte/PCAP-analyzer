@@ -1,7 +1,33 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import update
+
 from app.models import Capture, CaptureStatus, Flow, Host, TimelineEvent
 
 
-def persist_analysis(db, capture: Capture, analysis: dict) -> None:
+class CaptureLeaseLost(Exception):
+    """Raised when a worker no longer owns the capture processing lease."""
+
+
+def persist_analysis(db, capture: Capture, analysis: dict, processing_token: str) -> None:
+    claim = db.execute(
+        update(Capture)
+        .where(
+            Capture.id == capture.id,
+            Capture.status == CaptureStatus.PROCESSING,
+            Capture.processing_token == processing_token,
+            Capture.processing_lease_expires_at > datetime.now(timezone.utc),
+        )
+        .values(
+            status=CaptureStatus.COMPLETED,
+            processing_token=None,
+            processing_lease_expires_at=None,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    if claim.rowcount != 1:
+        raise CaptureLeaseLost(f"Processing lease was lost for capture {capture.id}")
+
     hosts_by_ip = {}
     for data in analysis["hosts"]:
         host = Host(
@@ -56,4 +82,6 @@ def persist_analysis(db, capture: Capture, analysis: dict) -> None:
     capture.last_packet_at = analysis["last_packet_at"]
     capture.error_message = None
     capture.status = CaptureStatus.COMPLETED
+    capture.processing_token = None
+    capture.processing_lease_expires_at = None
     db.commit()

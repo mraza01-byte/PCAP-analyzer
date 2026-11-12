@@ -5,24 +5,28 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models import Capture, Flow, Host
 from app.schemas.entities import FlowList
+from app.api.v1.search import contains_pattern
 
 router = APIRouter(prefix="/flows", tags=["flows"])
 
 
 @router.get("", response_model=FlowList)
 def list_flows(protocol: str | None = None, search: str | None = None,
+               capture_id: str | None = None,
                limit: int = Query(500, ge=1, le=5000), db: Session = Depends(get_db)):
     query = select(Flow)
+    if capture_id:
+        query = query.where(Flow.capture_id == capture_id)
     if protocol:
         query = query.where(or_(func.upper(Flow.protocol) == protocol.upper(), func.upper(Flow.application) == protocol.upper()))
     if search:
-        like = f"%{search}%"
+        pattern = contains_pattern(search)
         query = query.where(or_(
-            Flow.src_host.has(Host.ip_address.like(like)),
-            Flow.dst_host.has(Host.ip_address.like(like)),
-            Flow.capture.has(Capture.original_filename.like(like)),
-            Flow.application.like(like),
-            Flow.protocol.like(like),
+            Flow.src_host.has(Host.ip_address.like(pattern, escape="\\")),
+            Flow.dst_host.has(Host.ip_address.like(pattern, escape="\\")),
+            Flow.capture.has(Capture.original_filename.like(pattern, escape="\\")),
+            Flow.application.like(pattern, escape="\\"),
+            Flow.protocol.like(pattern, escape="\\"),
         ))
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     flows = db.scalars(query.order_by(Flow.start_time).limit(limit)).all()
