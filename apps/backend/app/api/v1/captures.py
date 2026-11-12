@@ -30,6 +30,7 @@ from app.models.flow import Flow
 from app.models.host import Host
 from app.schemas.entities import CaptureOut, FlowOut, HostOut, NetworkMapOut
 from app.services.capture_processing import CaptureLeaseLost, persist_analysis
+from app.services.pcap.extractor import ProtocolExtractionCancelled, extract_protocols
 
 router = APIRouter(prefix="/captures", tags=["captures"])
 logger = logging.getLogger(__name__)
@@ -260,6 +261,28 @@ async def upload_capture(
                     status_code=500,
                     detail={"capture_id": capture_id, "message": "Capture analysis failed"},
                 ) from error
+
+            try:
+                protocol_data = await run_in_threadpool(extract_protocols, evidence_path, lease.lost.is_set)
+                analysis["dns_records"] = protocol_data.get("dns_records", [])
+                analysis["http_requests"] = protocol_data.get("http_requests", [])
+                analysis["tls_records"] = protocol_data.get("tls_records", [])
+                analysis["certificates"] = protocol_data.get("certificates", [])
+                analysis["hostnames"] = protocol_data.get("hostnames", {})
+                analysis["flow_applications"] = protocol_data.get("flow_applications", {})
+                analysis["flow_summaries"] = protocol_data.get("flow_summaries", {})
+                if protocol_data.get("timeline_events"):
+                    analysis["timeline_events"].extend(protocol_data["timeline_events"])
+            except ProtocolExtractionCancelled as error:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Capture processing ownership expired; retry the upload",
+                ) from error
+            except Exception as error:
+                logger.warning(
+                    "Protocol extraction failed, proceeding with base capture analysis",
+                    extra={"capture_id": capture_id, "error": str(error)},
+                )
 
             try:
                 lease.persist(db, capture, analysis, processing_token)
