@@ -26,6 +26,15 @@ def isolated_database(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def client():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+@pytest.fixture
 def db_session(tmp_path):
     """A fresh, empty SQLite database (tables created from the models) for model tests."""
     engine = create_engine(f"sqlite:///{(tmp_path / 'test.db').as_posix()}")

@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import enum
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Column, Enum, ForeignKey, Index, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,16 +46,16 @@ class Investigation(IdTimestampMixin, Base):
     __tablename__ = "investigations"
 
     title: Mapped[str] = mapped_column(String(255))
-    description: Mapped[str | None] = mapped_column(Text)
+    description: Mapped[Optional[str]] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(16), default="medium")
     lead_analyst: Mapped[str] = mapped_column(String(255), default="")
-    findings: Mapped[str | None] = mapped_column(Text)
-    ioc_list: Mapped[str | None] = mapped_column(Text)
+    findings: Mapped[Optional[str]] = mapped_column(Text)
+    ioc_list: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[InvestigationStatus] = mapped_column(
         Enum(InvestigationStatus, native_enum=False, length=16, values_callable=lambda e: [m.value for m in e]),
         default=InvestigationStatus.OPEN,
     )
-    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(UTCDateTime)
 
     captures: Mapped[list["Capture"]] = relationship(secondary=investigation_captures, back_populates="investigations")
     flows: Mapped[list["Flow"]] = relationship(secondary=investigation_flows, back_populates="investigations")

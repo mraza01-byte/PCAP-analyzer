@@ -15,6 +15,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {
     "captures", "hosts", "flows", "investigations",
     "investigation_captures", "investigation_flows", "timeline_events",
+    "dns_records", "http_requests", "tls_records", "certificates",
 }
 
 

@@ -40,6 +40,8 @@ def persist_analysis(db, capture: Capture, analysis: dict, processing_token: str
             bytes_sent=data["bytes_sent"],
             bytes_received=data["bytes_received"],
             open_ports=data["open_ports"],
+            role=data.get("role", "Observed endpoint"),
+            risk_score=data.get("risk_score", 0),
         )
         db.add(host)
         hosts_by_ip[data["ip_address"]] = host
@@ -62,19 +64,28 @@ def persist_analysis(db, capture: Capture, analysis: dict, processing_token: str
             bytes_reverse=data["bytes_reverse"],
             application=data["application"],
             tcp_flags=data["tcp_flags"],
+            summary=data.get("summary"),
+            payload_preview=data.get("payload_preview"),
         )
         db.add(flow)
         flows_by_key[data["flow_key"]] = flow
     db.flush()
 
     for data in analysis["timeline_events"]:
+        flow_obj = flows_by_key.get(data.get("flow_key"))
+        flow_id = flow_obj.id if flow_obj else None
         db.add(TimelineEvent(
             capture_id=capture.id,
-            flow_id=flows_by_key[data["flow_key"]].id,
+            flow_id=flow_id,
             event_time=data["event_time"],
             event_type=data["event_type"],
             title=data["title"],
             description=data["description"],
+            severity=data.get("severity", "info"),
+            category=data.get("category", "General"),
+            protocol=data.get("protocol", flow_obj.protocol if flow_obj else None),
+            src=data.get("src"),
+            dst=data.get("dst"),
         ))
 
     capture.packet_count = analysis["packet_count"]

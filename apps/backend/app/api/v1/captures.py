@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import logging
@@ -8,10 +10,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Event, Lock
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from starlette.concurrency import run_in_threadpool
 
 from engine.services.analyzer import (
@@ -22,8 +24,11 @@ from engine.services.analyzer import (
 )
 from app.core.config import get_settings
 from app.database.session import get_db, get_session_factory
-from app.models import Capture, CaptureFormat, CaptureStatus, Flow
-from app.schemas.entities import CaptureOut
+from app.models.capture import Capture, CaptureFormat, CaptureStatus
+from app.models.dns_record import DnsRecord
+from app.models.flow import Flow
+from app.models.host import Host
+from app.schemas.entities import CaptureOut, FlowOut, HostOut, NetworkMapOut
 from app.services.capture_processing import CaptureLeaseLost, persist_analysis
 
 router = APIRouter(prefix="/captures", tags=["captures"])
@@ -60,12 +65,15 @@ class ProcessingLease:
 
 
 @router.get("", response_model=list[CaptureOut])
+@router.get("/", response_model=list[CaptureOut], include_in_schema=False)
 def list_captures(db: Session = Depends(get_db)):
     captures = db.scalars(select(Capture).order_by(Capture.created_at.desc())).all()
     return [_serialize_capture(db, capture) for capture in captures]
 
 
-@router.post("/upload", response_model=CaptureOut, status_code=201)
+@router.post("", response_model=CaptureOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=CaptureOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@router.post("/upload", response_model=CaptureOut, status_code=status.HTTP_201_CREATED)
 async def upload_capture(
     response: Response,
     file: UploadFile = File(...),
@@ -88,6 +96,7 @@ async def upload_capture(
 
         settings.evidence_dir.mkdir(parents=True, exist_ok=True)
         evidence_path = settings.evidence_dir / f"{capture_id}.capture"
+
         descriptor = os.open(evidence_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(descriptor, "wb") as destination:
             chunk = first_chunk
@@ -402,7 +411,7 @@ def get_capture(capture_id: str, db: Session = Depends(get_db)):
     return _serialize_capture(db, capture)
 
 
-@router.delete("/{capture_id}", status_code=204)
+@router.delete("/{capture_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_capture(capture_id: str, db: Session = Depends(get_db)):
     capture = db.get(Capture, capture_id)
     if not capture:
@@ -413,6 +422,45 @@ def delete_capture(capture_id: str, db: Session = Depends(get_db)):
     db.commit()
     if stored_path.parent == evidence_dir:
         stored_path.unlink(missing_ok=True)
+
+
+@router.get("/{capture_id}/network", response_model=NetworkMapOut)
+def get_network_map(capture_id: str, db: Session = Depends(get_db)):
+    """Returns a holistic representation of the network discovered in this capture."""
+    capture = db.get(Capture, capture_id)
+    if not capture:
+        raise HTTPException(status_code=404, detail="Capture not found")
+
+    hosts = db.scalars(select(Host).where(Host.capture_id == capture_id)).all()
+    flows = db.scalars(
+        select(Flow)
+        .options(joinedload(Flow.src_host), joinedload(Flow.dst_host), joinedload(Flow.capture))
+        .where(Flow.capture_id == capture_id)
+    ).all()
+
+    # Protocols distribution
+    proto_counts: dict[str, int] = {}
+    app_counts: dict[str, int] = {}
+    for f in flows:
+        proto_counts[f.protocol] = proto_counts.get(f.protocol, 0) + 1
+        app_name = f.application or "Unknown"
+        app_counts[app_name] = app_counts.get(app_name, 0) + 1
+
+    # Top domains from DNS
+    dns_records = db.scalars(select(DnsRecord.query_name).where(DnsRecord.capture_id == capture_id).distinct()).all()
+
+    flow_outs = [FlowOut.model_validate(f) for f in flows]
+
+    return NetworkMapOut(
+        capture_id=capture_id,
+        total_hosts=len(hosts),
+        total_flows=len(flows),
+        protocols=proto_counts,
+        applications=app_counts,
+        hosts=[HostOut.model_validate(h) for h in hosts],
+        flows=flow_outs,
+        top_domains=list(dns_records)[:20],
+    )
 
 
 def _safe_filename(filename: str | None) -> str:
@@ -426,20 +474,30 @@ def _serialize_capture(db: Session, capture: Capture) -> dict:
     duration = 0.0
     if capture.first_packet_at and capture.last_packet_at:
         duration = max(0.0, (capture.last_packet_at - capture.first_packet_at).total_seconds())
+    fmt_val = capture.file_format.value if hasattr(capture.file_format, "value") else str(capture.file_format)
+    status_map = {
+        CaptureStatus.IMPORTED: "registered",
+        CaptureStatus.PROCESSING: "processing",
+        CaptureStatus.COMPLETED: "analyzed",
+        CaptureStatus.FAILED: "failed",
+    }
+    status_str = status_map.get(capture.status, str(capture.status.value if hasattr(capture.status, "value") else capture.status))
     return {
         "id": capture.id,
+        "original_filename": capture.original_filename,
         "filename": capture.original_filename,
         "file_size_bytes": capture.file_size_bytes,
         "sha256": capture.sha256,
-        "file_type": capture.file_format.value,
-        "status": {CaptureStatus.IMPORTED: "registered", CaptureStatus.PROCESSING: "processing",
-                   CaptureStatus.COMPLETED: "analyzed", CaptureStatus.FAILED: "failed"}[capture.status],
+        "file_format": fmt_val,
+        "file_type": fmt_val,
+        "status": status_str,
         "packet_count": capture.packet_count or 0,
         "first_packet_at": capture.first_packet_at,
         "last_packet_at": capture.last_packet_at,
         "flow_count": flow_count,
         "duration_seconds": duration,
         "notes": capture.error_message,
+        "tshark_processed": 0,
         "created_at": capture.created_at,
         "updated_at": capture.updated_at,
     }

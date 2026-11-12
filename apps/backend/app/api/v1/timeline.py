@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session

@@ -42,3 +42,14 @@ def get_db() -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+# Compatibility aliases for scripts and tests
+def SessionLocal() -> Session:
+    return get_session_factory()()
+
+
+def __getattr__(name: str):
+    if name == "engine":
+        return get_engine()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
