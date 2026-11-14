@@ -1,15 +1,27 @@
+import hashlib
+import os
+import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, HTTPException, UploadFile
 
 from database import conn
-from services.hashing import sha256_file
+from services.analyzer import CaptureAnalysisError, detect_capture_format
 from services.host_discovery import discover_hosts
 
 app = FastAPI(title="PCAP-MAN Engine")
 
-EVIDENCE_DIR = Path("evidence")
-EVIDENCE_DIR.mkdir(exist_ok=True)
+BASE_DIR = Path(__file__).resolve().parent
+EVIDENCE_DIR = BASE_DIR / "data" / "evidence"
+MAX_UPLOAD_SIZE_BYTES = 1_073_741_824
+CHUNK_SIZE_BYTES = 1024 * 1024
+EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _safe_filename(filename: str | None) -> str:
+    name = Path((filename or "capture.pcap").replace("\\", "/")).name
+    name = "".join(char for char in name if char.isprintable() and char not in "\r\n\0")
+    return (name or "capture.pcap")[:255]
 
 
 @app.get("/")
@@ -19,51 +31,78 @@ def root():
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
-    file_path = EVIDENCE_DIR / file.filename
+    original_filename = _safe_filename(file.filename)
+    file_path = EVIDENCE_DIR / f"{uuid.uuid4().hex}.capture"
+    digest = hashlib.sha256()
+    filesize = 0
+    persisted = False
 
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    try:
+        descriptor = os.open(file_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as destination:
+            while chunk := await file.read(CHUNK_SIZE_BYTES):
+                filesize += len(chunk)
+                if filesize > MAX_UPLOAD_SIZE_BYTES:
+                    raise HTTPException(status_code=413, detail="Capture exceeds the 1 GiB upload limit")
+                digest.update(chunk)
+                destination.write(chunk)
 
-    sha256 = sha256_file(str(file_path))
-    filesize = file_path.stat().st_size
+        if filesize == 0:
+            raise HTTPException(status_code=400, detail="The uploaded capture is empty")
 
-    cursor = conn.execute(
-        "SELECT id FROM captures WHERE sha256 = ?",
-        (sha256,),
-    )
+        try:
+            file_format = detect_capture_format(file_path)
+        except CaptureAnalysisError as error:
+            raise HTTPException(status_code=415, detail=str(error)) from error
 
-    existing = cursor.fetchone()
+        sha256 = digest.hexdigest()
+        existing = conn.execute(
+            "SELECT id FROM captures WHERE sha256 = ?",
+            (sha256,),
+        ).fetchone()
+        if existing:
+            return {
+                "error": "duplicate_capture",
+                "filename": original_filename,
+                "sha256": sha256,
+            }
 
-    if existing:
+        try:
+            discover_hosts(file_path, commit=False)
+        except Exception as error:
+            conn.rollback()
+            raise HTTPException(status_code=422, detail="Capture packets could not be parsed") from error
+
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO captures (filename, filesize, sha256)
+                VALUES (?, ?, ?)
+                """,
+                (original_filename, filesize, sha256),
+            )
+            conn.commit()
+        except Exception as error:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail="Could not save capture metadata") from error
+
+        persisted = True
         return {
-            "error": "duplicate_capture",
-            "filename": file.filename,
+            "id": cursor.lastrowid,
+            "filename": original_filename,
+            "filesize": filesize,
             "sha256": sha256,
+            "file_format": file_format,
         }
-
-    cursor = conn.execute(
-        """
-        INSERT INTO captures
-        (filename, filesize, sha256)
-        VALUES (?, ?, ?)
-        """,
-        (
-            file.filename,
-            filesize,
-            sha256,
-        ),
-    )
-
-    conn.commit()
-
-    discover_hosts(str(file_path))
-
-    return {
-        "id": cursor.lastrowid,
-        "filename": file.filename,
-        "filesize": filesize,
-        "sha256": sha256,
-    }
+    except HTTPException:
+        raise
+    except OSError as error:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Could not safely store uploaded capture") from error
+    finally:
+        await file.close()
+        if not persisted:
+            file_path.unlink(missing_ok=True)
 
 
 @app.get("/captures")
@@ -137,9 +176,7 @@ def get_host(ip: str):
     row = cursor.fetchone()
 
     if not row:
-        return {
-            "error": "host_not_found"
-        }
+        return {"error": "host_not_found"}
 
     return {
         "id": row[0],

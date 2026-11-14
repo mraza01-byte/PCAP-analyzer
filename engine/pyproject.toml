@@ -6,7 +6,12 @@ build-backend = "setuptools.build_meta"
 name = "pcapman-engine"
 version = "0.1.0"
 requires-python = ">=3.10"
-dependencies = ["scapy==2.6.1"]
+dependencies = [
+    "scapy==2.6.1",
+    "fastapi>=0.115.0",
+    "python-multipart>=0.0.9",
+    "uvicorn[standard]>=0.30.0",
+]
 
 [tool.setuptools]
 packages = ["engine", "engine.services"]
