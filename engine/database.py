@@ -1,6 +1,11 @@
 import sqlite3
+from pathlib import Path
 
-conn = sqlite3.connect("pcapman.db", check_same_thread=False)
+BASE_DIR = Path(__file__).resolve().parent
+DB_PATH = BASE_DIR / "pcapman.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+conn = sqlite3.connect(DB_PATH.as_posix(), check_same_thread=False)
 
 conn.execute("""
 CREATE TABLE IF NOT EXISTS captures (
