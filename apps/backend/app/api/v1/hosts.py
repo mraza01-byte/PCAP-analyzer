@@ -40,7 +40,7 @@ def list_hosts(
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     hosts = db.scalars(
-        query.order_by(Host.packet_count.desc(), Host.ip_address).offset(offset).limit(limit)
+        query.order_by(Host.packet_count.desc(), Host.ip_address, Host.id).offset(offset).limit(limit)
     ).all()
     return HostList(total=total, hosts=[_host_record(host) for host in hosts])
 

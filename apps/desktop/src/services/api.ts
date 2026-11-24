@@ -65,8 +65,12 @@ export interface FlowRecord {
 }
 
 export interface HostRecord {
+  id: string;
+  capture_id: string;
   ip: string;
+  ip_address: string;
   mac: string;
+  mac_address: string;
   hostname: string;
   role: string;
   open_ports: number[];
@@ -76,7 +80,9 @@ export interface HostRecord {
   packet_count: number;
   risk_score?: number;
   first_seen: string | null;
+  first_seen_at: string | null;
   last_seen: string | null;
+  last_seen_at: string | null;
 }
 
 export interface TimelineEventRecord {

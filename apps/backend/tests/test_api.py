@@ -103,6 +103,15 @@ def test_upload_runs_engine_and_persists_capture_hosts_flows_and_timeline(client
     hosts = client.get("/api/v1/hosts").json()
     assert hosts["total"] == 2
     assert {host["ip"] for host in hosts["hosts"]} == {"192.0.2.10", "198.51.100.20"}
+    source_host = next(host for host in hosts["hosts"] if host["ip"] == "192.0.2.10")
+    assert source_host["mac"] == "02:00:00:00:00:01"
+    assert source_host["packet_count"] == 1
+    assert source_host["bytes_sent"] > 0 and source_host["bytes_received"] == 0
+    assert source_host["bytes_total"] == source_host["bytes_sent"]
+    assert source_host["first_seen"] == source_host["last_seen"]
+    assert source_host["role"] == "Observed endpoint"
+    host_detail = client.get(f"/api/v1/hosts/{source_host['id']}")
+    assert host_detail.status_code == 200 and host_detail.json() == source_host
     flows = client.get("/api/v1/flows?search=192.0.2.10").json()
     assert flows["total"] == 1
     assert flows["flows"][0]["dst_ip"] == "198.51.100.20"
@@ -187,6 +196,32 @@ def test_host_search_includes_role_and_offset_paginates_results(client):
     assert first_page["total"] == second_page["total"] == 2
     assert [host["ip"] for host in first_page["hosts"]] == ["192.0.2.10"]
     assert [host["ip"] for host in second_page["hosts"]] == ["192.0.2.20"]
+
+
+def test_host_pagination_is_stable_when_ip_repeats_across_captures(client):
+    with get_session_factory()() as db:
+        for index in range(2):
+            capture = Capture(
+                original_filename=f"same-ip-{index}.pcap",
+                file_path=f"same-ip-{index}.pcap",
+                file_size_bytes=1,
+                sha256=str(index) * 64,
+                file_format=CaptureFormat.PCAP,
+            )
+            db.add(capture)
+            db.flush()
+            db.add(Host(capture_id=capture.id, ip_address="192.0.2.10", role="Gateway", packet_count=1))
+        db.commit()
+
+    params = {"search": "Gateway", "limit": 1}
+    first_page = client.get("/api/v1/hosts", params={**params, "offset": 0}).json()
+    repeated_first_page = client.get("/api/v1/hosts", params={**params, "offset": 0}).json()
+    second_page = client.get("/api/v1/hosts", params={**params, "offset": 1}).json()
+
+    assert first_page["total"] == second_page["total"] == 2
+    assert first_page["hosts"][0]["id"] == repeated_first_page["hosts"][0]["id"]
+    assert first_page["hosts"][0]["id"] != second_page["hosts"][0]["id"]
+    assert first_page["hosts"][0]["ip"] == second_page["hosts"][0]["ip"] == "192.0.2.10"
 
 
 def test_unexpected_analyzer_error_marks_capture_failed_and_allows_retry(client, tmp_path, monkeypatch):

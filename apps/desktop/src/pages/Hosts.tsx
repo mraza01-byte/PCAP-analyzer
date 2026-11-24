@@ -234,7 +234,7 @@ export default function Hosts() {
             {hosts.map((host) => {
             return (
               <div
-                key={host.ip}
+                key={host.id}
                 onClick={() => setSelectedHost(host)}
                 style={{
                   backgroundColor: '#111827',
