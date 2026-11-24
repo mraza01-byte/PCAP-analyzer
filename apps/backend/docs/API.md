@@ -22,7 +22,7 @@ the existing Scapy-based engine; the API does not provide synthetic analysis res
 | `POST /api/v1/captures/upload` | Multipart field `file`; streams and validates PCAP/PCAPNG, stores evidence, analyzes it, and returns metadata and analysis status. A new capture returns **201**; a duplicate or retry of a failed capture returns **200** when it completes. |
 | `GET /api/v1/captures/{id}` | Capture metadata and current status |
 | `DELETE /api/v1/captures/{id}` | Deletes a capture, its derived rows, and its stored evidence |
-| `GET /api/v1/hosts?search=&capture_id=&limit=` | `{"total":n,"hosts":[HostOut, ...]}` |
+| `GET /api/v1/hosts?search=&role=&capture_id=&limit=&offset=` | `{"total":n,"hosts":[HostOut, ...]}` |
 | `GET /api/v1/flows?protocol=&search=&capture_id=&limit=` | `{"total":n,"flows":[FlowOut, ...]}` |
 | `GET /api/v1/flows/{id}` | One persisted flow with endpoint and byte-count details |
 | `GET /api/v1/timeline?search=&severity=&category=&capture_id=&limit=` | `{"total":n,"events":[TimelineEventOut, ...]}` |
@@ -35,7 +35,10 @@ the existing Scapy-based engine; the API does not provide synthetic analysis res
 
 Capture, host, flow, timeline, and investigation response shapes match the desktop service types.
 Database storage names and relationships are documented in `DATABASE.md`.
-Host, flow, and timeline lists accept `capture_id` to restrict results to one capture.
+Host, flow, and timeline lists accept `capture_id` to restrict results to one capture. Host
+`search` matches IP address, MAC address, hostname, or role; `role` can also be used as an exact
+role filter. Host lists default to 500 results and support `limit` (up to 5000) and `offset` for
+pagination.
 Timeline event severity is currently `info`; the analyzer does not assign threat severity.
 
 ## Upload behaviour
@@ -47,10 +50,12 @@ type or filename. Duplicate SHA-256 evidence reuses the existing record. A malfo
 passes the header check is retained with `failed` status and an error note; unsupported file types
 are rejected without a database record.
 
-The engine streams packets and currently extracts IP/IPv6 endpoints, Ethernet MAC addresses,
-TCP/UDP and common IP protocols, ports, packet/byte counts, TCP flags, capture bounds, and
-flow-start/last-seen timeline events. It does not currently decode DNS names, TLS SNI, HTTP
-payloads, reputation, or threat severity; reports do not claim those findings.
+The engine streams packets and extracts IP/IPv6 endpoints, Ethernet MAC addresses, TCP/UDP and
+common IP protocols, packet/byte counts, TCP flags, capture bounds, and flow-start/last-seen
+timeline events. TCP service ports are recorded when a SYN-ACK response is observed; UDP service
+ports are inferred from reverse-direction responses. Upload processing also extracts DNS queries
+and answers, HTTP request metadata, TLS metadata including SNI when available, and certificate
+metadata. These protocol observations do not calculate reputation or threat severity.
 
 ## Errors
 

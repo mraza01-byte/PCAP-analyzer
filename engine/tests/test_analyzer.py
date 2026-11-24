@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 import pytest
-from scapy.all import Ether, IP, TCP, PcapNgWriter, wrpcap
+from scapy.all import Ether, IP, TCP, UDP, PcapNgWriter, wrpcap
 
 from engine.services.analyzer import CaptureAnalysisCancelled, analyze_capture
 
@@ -39,6 +39,47 @@ def test_reads_pcapng_without_loading_file_as_a_blob(tmp_path):
     assert result["file_format"] == "pcapng"
     assert result["packet_count"] == 1
     assert len(result["flows"]) == 1
+
+
+def test_counts_same_ip_endpoint_once_per_packet(tmp_path):
+    capture = tmp_path / "same-ip.pcap"
+    packet = Ether() / IP(src="192.0.2.10", dst="192.0.2.10") / TCP(sport=1234, dport=443, flags="PA")
+    packet.time = 1_800_000_000
+    wrpcap(str(capture), [packet])
+
+    host = analyze_capture(capture)["hosts"][0]
+
+    assert host["packet_count"] == 1
+    assert host["bytes_sent"] == len(packet)
+    assert host["bytes_received"] == 0
+
+
+def test_only_records_confirmed_tcp_service_port_not_client_ephemeral_port(tmp_path):
+    capture = tmp_path / "tcp-handshake.pcap"
+    request = Ether() / IP(src="192.0.2.10", dst="198.51.100.20") / TCP(sport=49152, dport=443, flags="S")
+    response = Ether() / IP(src="198.51.100.20", dst="192.0.2.10") / TCP(sport=443, dport=49152, flags="SA")
+    request.time = 1_800_000_000
+    response.time = 1_800_000_001
+    wrpcap(str(capture), [request, response])
+
+    hosts = {host["ip_address"]: host for host in analyze_capture(capture)["hosts"]}
+
+    assert hosts["198.51.100.20"]["open_ports"] == [443]
+    assert hosts["192.0.2.10"]["open_ports"] == []
+
+
+def test_infers_udp_service_port_from_reverse_flow(tmp_path):
+    capture = tmp_path / "udp-response.pcap"
+    request = Ether() / IP(src="192.0.2.10", dst="198.51.100.20") / UDP(sport=53000, dport=53)
+    response = Ether() / IP(src="198.51.100.20", dst="192.0.2.10") / UDP(sport=53, dport=53000)
+    request.time = 1_800_000_000
+    response.time = 1_800_000_001
+    wrpcap(str(capture), [request, response])
+
+    hosts = {host["ip_address"]: host for host in analyze_capture(capture)["hosts"]}
+
+    assert hosts["198.51.100.20"]["open_ports"] == [53]
+    assert hosts["192.0.2.10"]["open_ports"] == []
 
 
 def test_stops_streaming_when_processing_ownership_is_lost(tmp_path):

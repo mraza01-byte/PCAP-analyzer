@@ -19,6 +19,7 @@ def list_hosts(
     capture_id: str | None = None,
     role: str | None = None,
     limit: int = Query(500, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
     query = select(Host)
@@ -33,11 +34,14 @@ def list_hosts(
                 Host.ip_address.like(pattern, escape="\\"),
                 Host.hostname.like(pattern, escape="\\"),
                 Host.mac_address.like(pattern, escape="\\"),
+                Host.role.like(pattern, escape="\\"),
             )
         )
 
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    hosts = db.scalars(query.order_by(Host.packet_count.desc(), Host.ip_address).limit(limit)).all()
+    hosts = db.scalars(
+        query.order_by(Host.packet_count.desc(), Host.ip_address).offset(offset).limit(limit)
+    ).all()
     return HostList(total=total, hosts=[_host_record(host) for host in hosts])
 
 

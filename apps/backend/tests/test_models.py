@@ -8,6 +8,7 @@ from app.models import (
     Capture, CaptureFormat, CaptureStatus, Flow, Host,
     Investigation, InvestigationStatus, TimelineEvent,
 )
+from app.schemas.entities import HostOut
 
 
 def make_capture(**overrides):
@@ -86,6 +87,13 @@ def test_same_ip_allowed_in_different_captures(db_session):
         Host(capture_id=c2.id, ip_address="10.0.0.1"),
     ])
     db_session.commit()
+
+
+def test_missing_host_mac_stays_unknown_instead_of_fabricating_address():
+    host = HostOut(ip="192.0.2.1")
+
+    assert host.mac == ""
+    assert host.mac_address == ""
 
 
 def test_deleting_capture_removes_its_data_but_keeps_investigation(db_session):

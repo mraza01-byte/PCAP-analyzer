@@ -29,6 +29,7 @@ def analyze_capture(path: str | Path, is_cancelled: Callable[[], bool] | None = 
     file_format = detect_capture_format(path)
     hosts: dict[str, dict] = {}
     flows: dict[tuple, dict] = {}
+    flow_initiators: dict[tuple, tuple[str, int | None]] = {}
     packet_count = 0
 
     try:
@@ -57,6 +58,28 @@ def analyze_capture(path: str | Path, is_cancelled: Callable[[], bool] | None = 
                 source_port = int(transport.sport) if transport else None
                 destination_port = int(transport.dport) if transport else None
                 packet_bytes = len(packet)
+                source_endpoint = (source, source_port)
+                destination_endpoint = (destination, destination_port)
+                endpoints = tuple(sorted((source_endpoint, destination_endpoint)))
+                flow_key = (protocol, *endpoints)
+                flow = flows.get(flow_key)
+                if flow is None:
+                    flow_initiators[flow_key] = source_endpoint
+                    flow = flows[flow_key] = {
+                        "src_ip": source,
+                        "src_port": source_port,
+                        "dst_ip": destination,
+                        "dst_port": destination_port,
+                        "protocol": protocol,
+                        "application": _application(protocol, source_port, destination_port),
+                        "packet_count": 0,
+                        "bytes_total": 0,
+                        "bytes_forward": 0,
+                        "bytes_reverse": 0,
+                        "start_time": timestamp,
+                        "end_time": timestamp,
+                        "tcp_flags": set(),
+                    }
 
                 for address, mac in ((source, source_mac), (destination, destination_mac)):
                     host = hosts.setdefault(address, {
@@ -75,32 +98,21 @@ def analyze_capture(path: str | Path, is_cancelled: Callable[[], bool] | None = 
                         host["mac_address"] = mac
                 hosts[source]["packet_count"] += 1
                 hosts[source]["bytes_sent"] += packet_bytes
-                hosts[destination]["packet_count"] += 1
-                hosts[destination]["bytes_received"] += packet_bytes
-                if destination_port is not None:
-                    hosts[destination]["open_ports"].add(destination_port)
+                if destination != source:
+                    hosts[destination]["packet_count"] += 1
+                    hosts[destination]["bytes_received"] += packet_bytes
 
-                source_endpoint = (source, source_port)
-                destination_endpoint = (destination, destination_port)
-                endpoints = tuple(sorted((source_endpoint, destination_endpoint)))
-                flow_key = (protocol, *endpoints)
-                flow = flows.get(flow_key)
-                if flow is None:
-                    flow = flows[flow_key] = {
-                        "src_ip": source,
-                        "src_port": source_port,
-                        "dst_ip": destination,
-                        "dst_port": destination_port,
-                        "protocol": protocol,
-                        "application": _application(protocol, source_port, destination_port),
-                        "packet_count": 0,
-                        "bytes_total": 0,
-                        "bytes_forward": 0,
-                        "bytes_reverse": 0,
-                        "start_time": timestamp,
-                        "end_time": timestamp,
-                        "tcp_flags": set(),
-                    }
+                if protocol == "TCP" and packet.haslayer(TCP):
+                    tcp_flags = int(packet[TCP].flags)
+                    if tcp_flags & 0x12 == 0x12 and not tcp_flags & 0x04 and source_port is not None:
+                        hosts[source]["open_ports"].add(source_port)
+                elif (
+                    protocol == "UDP"
+                    and source_endpoint != flow_initiators[flow_key]
+                    and source_port is not None
+                ):
+                    hosts[source]["open_ports"].add(source_port)
+
                 flow["packet_count"] += 1
                 flow["bytes_total"] += packet_bytes
                 flow["end_time"] = max(flow["end_time"], timestamp)

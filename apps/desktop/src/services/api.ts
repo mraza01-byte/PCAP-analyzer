@@ -250,10 +250,17 @@ export async function getFlowDetail(id: string): Promise<FlowRecord> {
  * Fetch discovered host profiles.
  * GET /api/v1/hosts
  */
-export async function getHosts(search?: string, captureId?: string): Promise<{ total: number; hosts: HostRecord[] }> {
+export async function getHosts(params?: {
+  search?: string;
+  captureId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ total: number; hosts: HostRecord[] }> {
   const query = new URLSearchParams();
-  if (search) query.set('search', search);
-  if (captureId) query.set('capture_id', captureId);
+  if (params?.search) query.set('search', params.search);
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.offset !== undefined) query.set('offset', String(params.offset));
   const path = `/api/v1/hosts${query.toString() ? `?${query.toString()}` : ''}`;
   return apiFetch<{ total: number; hosts: HostRecord[] }>(path);
 }

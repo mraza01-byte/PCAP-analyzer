@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Globe,
   Search,
@@ -11,35 +11,46 @@ import {
 } from 'lucide-react';
 import { getHosts, type HostRecord } from '../services/api';
 
+const HOSTS_PAGE_SIZE = 500;
+
 export default function Hosts() {
   const [hosts, setHosts] = useState<HostRecord[]>([]);
+  const [totalHosts, setTotalHosts] = useState(0);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [page, setPage] = useState(0);
   const [selectedHost, setSelectedHost] = useState<HostRecord | null>(null);
   const [copiedIp, setCopiedIp] = useState<string | null>(null);
 
-  const fetchHostsData = async () => {
+  const fetchHostsData = useCallback(async () => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const res = await getHosts(searchTerm || undefined);
+      const res = await getHosts({
+        search: appliedSearch || undefined,
+        limit: HOSTS_PAGE_SIZE,
+        offset: page * HOSTS_PAGE_SIZE,
+      });
       setHosts(res.hosts);
+      setTotalHosts(res.total);
     } catch (err) {
       console.error('Failed to load hosts', err);
       setErrorMessage(err instanceof Error ? err.message : 'Could not load hosts');
     } finally {
       setLoading(false);
     }
-  };
+  }, [appliedSearch, page]);
 
   useEffect(() => {
     fetchHostsData();
-  }, []);
+  }, [fetchHostsData]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    fetchHostsData();
+    setPage(0);
+    setAppliedSearch(searchTerm.trim());
   };
 
   const handleCopy = (ip: string) => {
@@ -85,14 +96,14 @@ export default function Hosts() {
             <Globe size={16} style={{ color: 'var(--color-cyan)' }} />
             <div>
               <div style={{ fontSize: '11px', color: '#64748b' }}>Discovered Hosts</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>{hosts.length}</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>{totalHosts}</div>
             </div>
           </div>
 
           <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Server size={16} style={{ color: 'var(--color-cyan)' }} />
             <div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>Hosts with Observed Services</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Services on This Page</div>
               <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>{hostsWithServices.length}</div>
             </div>
           </div>
@@ -100,7 +111,7 @@ export default function Hosts() {
           <div style={{ backgroundColor: '#111827', border: '1px solid #1f2937', borderRadius: '8px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <HardDrive size={16} style={{ color: 'var(--color-terminal)' }} />
             <div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>Network Activity</div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>Activity on This Page</div>
               <div style={{ fontSize: '16px', fontWeight: 700, color: '#f8fafc' }}>
                 {(totalBytes / 1024).toFixed(1)} KB <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>({totalPackets} pkts)</span>
               </div>
@@ -195,8 +206,32 @@ export default function Hosts() {
           <p>No host profiles match the search criteria.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
-          {hosts.map((host) => {
+        <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#94a3b8', fontSize: '13px' }}>
+            <span>
+              Showing {page * HOSTS_PAGE_SIZE + 1}–{page * HOSTS_PAGE_SIZE + hosts.length} of {totalHosts} hosts
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setPage((currentPage) => currentPage - 1)}
+                disabled={page === 0}
+                style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: page === 0 ? '#475569' : '#cbd5e1', borderRadius: '6px', padding: '6px 10px', cursor: page === 0 ? 'default' : 'pointer' }}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((currentPage) => currentPage + 1)}
+                disabled={(page + 1) * HOSTS_PAGE_SIZE >= totalHosts}
+                style={{ backgroundColor: '#1e293b', border: '1px solid #334155', color: (page + 1) * HOSTS_PAGE_SIZE >= totalHosts ? '#475569' : '#cbd5e1', borderRadius: '6px', padding: '6px 10px', cursor: (page + 1) * HOSTS_PAGE_SIZE >= totalHosts ? 'default' : 'pointer' }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
+            {hosts.map((host) => {
             return (
               <div
                 key={host.ip}
@@ -325,8 +360,9 @@ export default function Hosts() {
                 </div>
               </div>
             );
-          })}
-        </div>
+            })}
+          </div>
+        </>
       )}
 
       {/* Host Profile Inspection Modal */}

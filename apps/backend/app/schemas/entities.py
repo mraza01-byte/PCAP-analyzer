@@ -140,8 +140,8 @@ class HostOut(_Out):
         elif self.mac and not self.mac_address:
             self.mac_address = self.mac
         if not self.mac:
-            self.mac = "00:00:00:00:00:00"
-            self.mac_address = "00:00:00:00:00:00"
+            self.mac = ""
+            self.mac_address = ""
         if not self.bytes_total and (self.bytes_sent or self.bytes_received):
             self.bytes_total = self.bytes_sent + self.bytes_received
         if self.first_seen_at and not self.first_seen:

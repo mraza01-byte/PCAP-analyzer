@@ -163,6 +163,32 @@ def test_search_treats_sql_wildcards_as_literals(client, tmp_path):
     assert client.get("/api/v1/timeline", params={"search": "_", "capture_id": capture_id}).json()["total"] == 0
 
 
+def test_host_search_includes_role_and_offset_paginates_results(client):
+    with get_session_factory()() as db:
+        capture = Capture(
+            original_filename="hosts.pcap",
+            file_path="hosts.pcap",
+            file_size_bytes=1,
+            sha256="c" * 64,
+            file_format=CaptureFormat.PCAP,
+        )
+        db.add(capture)
+        db.flush()
+        db.add_all([
+            Host(capture_id=capture.id, ip_address="192.0.2.10", role="Gateway", packet_count=5),
+            Host(capture_id=capture.id, ip_address="192.0.2.20", role="Gateway", packet_count=3),
+            Host(capture_id=capture.id, ip_address="192.0.2.30", role="Workstation", packet_count=1),
+        ])
+        db.commit()
+
+    first_page = client.get("/api/v1/hosts", params={"search": "gate", "limit": 1, "offset": 0}).json()
+    second_page = client.get("/api/v1/hosts", params={"search": "gate", "limit": 1, "offset": 1}).json()
+
+    assert first_page["total"] == second_page["total"] == 2
+    assert [host["ip"] for host in first_page["hosts"]] == ["192.0.2.10"]
+    assert [host["ip"] for host in second_page["hosts"]] == ["192.0.2.20"]
+
+
 def test_unexpected_analyzer_error_marks_capture_failed_and_allows_retry(client, tmp_path, monkeypatch):
     capture_path = tmp_path / "retry.pcap"
     _write_test_capture(capture_path)
