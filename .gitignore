@@ -1,4 +1,8 @@
 
+# Python bytecode and caches
+__pycache__/
+*.pyc
+
 # Local databases and generated metadata
 *.db
 *.sqlite

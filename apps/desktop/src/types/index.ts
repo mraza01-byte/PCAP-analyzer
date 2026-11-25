@@ -10,6 +10,7 @@ export type PageKey =
   | 'captures'
   | 'hosts'
   | 'flows'
+  | 'protocols'
   | 'timeline'
   | 'investigations'
   | 'briefing'

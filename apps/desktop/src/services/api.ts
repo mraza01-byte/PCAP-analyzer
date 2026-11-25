@@ -58,6 +58,7 @@ export interface FlowRecord {
   bytes_reverse: number;
   start_time: string | null;
   end_time: string | null;
+  duration_seconds?: number;
   tcp_flags: string;
   summary: string;
   capture_filename?: string;
@@ -90,6 +91,106 @@ export interface TimelineEventRecord {
   category: string;
   description: string;
   capture_filename?: string;
+}
+
+export interface DnsRecord {
+  id: string;
+  capture_id: string;
+  flow_id?: string | null;
+  timestamp: string;
+  query_name: string;
+  query_type: string;
+  response_code?: string | null;
+  answers?: string | null;
+  ttl?: number | null;
+}
+
+export interface HttpRequestRecord {
+  id: string;
+  capture_id: string;
+  flow_id?: string | null;
+  timestamp: string;
+  method: string;
+  host?: string | null;
+  url: string;
+  path?: string | null;
+  user_agent?: string | null;
+  status_code?: number | null;
+  response_phrase?: string | null;
+  content_type?: string | null;
+}
+
+export interface TlsRecord {
+  id: string;
+  capture_id: string;
+  flow_id?: string | null;
+  timestamp: string;
+  version: string;
+  sni?: string | null;
+  cipher_suite?: string | null;
+  alpn?: string | null;
+}
+
+export interface CertificateRecord {
+  id: string;
+  capture_id: string;
+  flow_id?: string | null;
+  fingerprint_sha256: string;
+  subject_cn?: string | null;
+  subject_org?: string | null;
+  issuer_cn?: string | null;
+  issuer_org?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  serial_number?: string | null;
+  san_list?: string | null;
+  is_self_signed: boolean;
+}
+
+export interface ProtocolDistributionItem {
+  category: string;
+  protocol: string;
+  application: string;
+  flow_count: number;
+  packet_count: number;
+  byte_count: number;
+  percentage: number;
+}
+
+export interface ProtocolStatsRecord {
+  total_dns: number;
+  total_http: number;
+  total_tls: number;
+  total_certificates: number;
+  total_flows: number;
+  protocol_distribution: ProtocolDistributionItem[];
+  dns_stats: {
+    total_queries: number;
+    total_responses: number;
+    by_type: Record<string, number>;
+    by_response_code: Record<string, number>;
+    top_domains: Array<{ name: string; count: number }>;
+  };
+  http_stats: {
+    by_method: Record<string, number>;
+    by_status: Record<string, number>;
+    top_hosts: Array<{ host: string; count: number }>;
+    top_user_agents: Array<{ user_agent: string; count: number }>;
+    content_types: Record<string, number>;
+  };
+  tls_stats: {
+    by_version: Record<string, number>;
+    top_sni: Array<{ sni: string; count: number }>;
+    top_ciphers: Array<{ cipher: string; count: number }>;
+    top_alpn: Array<{ alpn: string; count: number }>;
+  };
+  certificate_stats: {
+    total_certs: number;
+    self_signed_count: number;
+    expired_count: number;
+    valid_count: number;
+    top_issuers: Array<{ issuer: string; count: number }>;
+  };
 }
 
 export interface InvestigationCaseRecord {
@@ -377,5 +478,92 @@ export interface BriefingReportRecord {
 export async function generateBriefingReport(caseId?: string): Promise<BriefingReportRecord> {
   const query = caseId ? `?case_id=${encodeURIComponent(caseId)}` : '';
   return apiFetch<BriefingReportRecord>(`/api/v1/briefings/generate${query}`);
+}
+
+// ── Phase 3: Protocol Intelligence & Deep Packet Inspection API ──
+
+/**
+ * Fetch extracted DNS records.
+ * GET /api/v1/dns
+ */
+export async function getDnsRecords(params?: {
+  captureId?: string;
+  queryType?: string;
+  search?: string;
+  limit?: number;
+}): Promise<DnsRecord[]> {
+  const query = new URLSearchParams();
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.queryType) query.set('query_type', params.queryType);
+  if (params?.search) query.set('search', params.search);
+  if (params?.limit) query.set('limit', String(params.limit));
+  const path = `/api/v1/dns${query.toString() ? `?${query.toString()}` : ''}`;
+  return apiFetch<DnsRecord[]>(path);
+}
+
+/**
+ * Fetch extracted HTTP request/response transactions.
+ * GET /api/v1/http
+ */
+export async function getHttpRequests(params?: {
+  captureId?: string;
+  method?: string;
+  search?: string;
+  limit?: number;
+}): Promise<HttpRequestRecord[]> {
+  const query = new URLSearchParams();
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.method) query.set('method', params.method);
+  if (params?.search) query.set('search', params.search);
+  if (params?.limit) query.set('limit', String(params.limit));
+  const path = `/api/v1/http${query.toString() ? `?${query.toString()}` : ''}`;
+  return apiFetch<HttpRequestRecord[]>(path);
+}
+
+/**
+ * Fetch extracted TLS handshake metadata.
+ * GET /api/v1/tls
+ */
+export async function getTlsRecords(params?: {
+  captureId?: string;
+  version?: string;
+  search?: string;
+  limit?: number;
+}): Promise<TlsRecord[]> {
+  const query = new URLSearchParams();
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.version) query.set('version', params.version);
+  if (params?.search) query.set('search', params.search);
+  if (params?.limit) query.set('limit', String(params.limit));
+  const path = `/api/v1/tls${query.toString() ? `?${query.toString()}` : ''}`;
+  return apiFetch<TlsRecord[]>(path);
+}
+
+/**
+ * Fetch extracted X.509 certificates.
+ * GET /api/v1/certificates
+ */
+export async function getCertificates(params?: {
+  captureId?: string;
+  selfSigned?: boolean;
+  search?: string;
+  limit?: number;
+}): Promise<CertificateRecord[]> {
+  const query = new URLSearchParams();
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.selfSigned !== undefined) query.set('self_signed', String(params.selfSigned));
+  if (params?.search) query.set('search', params.search);
+  if (params?.limit) query.set('limit', String(params.limit));
+  const path = `/api/v1/certificates${query.toString() ? `?${query.toString()}` : ''}`;
+  return apiFetch<CertificateRecord[]>(path);
+}
+
+/**
+ * Fetch aggregated protocol intelligence statistics and categorization.
+ * GET /api/v1/protocols/stats
+ */
+export async function getProtocolStats(captureId?: string): Promise<ProtocolStatsRecord> {
+  const query = captureId ? `?capture_id=${encodeURIComponent(captureId)}` : '';
+  return apiFetch<ProtocolStatsRecord>(`/api/v1/protocols/stats${query}`);
 }
 

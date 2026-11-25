@@ -97,6 +97,7 @@ def _flow_record(flow: Flow) -> dict:
         "bytes_reverse": flow.bytes_reverse,
         "start_time": flow.start_time,
         "end_time": flow.end_time,
+        "duration_seconds": flow.duration_seconds,
         "tcp_flags": flow.tcp_flags or "-",
         "summary": summary,
         "payload_preview": flow.payload_preview,

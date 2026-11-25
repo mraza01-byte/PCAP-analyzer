@@ -182,6 +182,7 @@ class FlowOut(_Out):
     bytes_reverse: int = 0
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+    duration_seconds: float = 0.0
     tcp_flags: Optional[str] = "-"
     summary: Optional[str] = None
     payload_preview: Optional[str] = None
@@ -206,6 +207,9 @@ class FlowOut(_Out):
             bc = getattr(data, "byte_count", 0)
             bt = getattr(data, "bytes_total", 0) or bc
             preview = getattr(data, "payload_preview", None)
+            st = getattr(data, "start_time", None)
+            et = getattr(data, "end_time", None)
+            dur = max(0.0, (et - st).total_seconds()) if st and et else 0.0
             return {
                 "id": data.id,
                 "capture_id": getattr(data, "capture_id", None),
@@ -222,8 +226,9 @@ class FlowOut(_Out):
                 "bytes_total": bt,
                 "bytes_forward": getattr(data, "bytes_forward", 0),
                 "bytes_reverse": getattr(data, "bytes_reverse", 0),
-                "start_time": getattr(data, "start_time", None),
-                "end_time": getattr(data, "end_time", None),
+                "start_time": st,
+                "end_time": et,
+                "duration_seconds": getattr(data, "duration_seconds", dur),
                 "tcp_flags": getattr(data, "tcp_flags", "-") or "-",
                 "summary": getattr(data, "summary", None),
                 "payload_preview": preview,
@@ -462,3 +467,57 @@ class NetworkMapOut(BaseModel):
     hosts: list[HostOut]
     flows: list[FlowOut]
     top_domains: list[str]
+
+
+class ProtocolDistributionItem(BaseModel):
+    category: str
+    protocol: str
+    application: str
+    flow_count: int
+    packet_count: int
+    byte_count: int
+    percentage: float
+
+
+class DnsStats(BaseModel):
+    total_queries: int = 0
+    total_responses: int = 0
+    by_type: dict[str, int] = Field(default_factory=dict)
+    by_response_code: dict[str, int] = Field(default_factory=dict)
+    top_domains: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class HttpStats(BaseModel):
+    by_method: dict[str, int] = Field(default_factory=dict)
+    by_status: dict[str, int] = Field(default_factory=dict)
+    top_hosts: list[dict[str, Any]] = Field(default_factory=list)
+    top_user_agents: list[dict[str, Any]] = Field(default_factory=list)
+    content_types: dict[str, int] = Field(default_factory=dict)
+
+
+class TlsStats(BaseModel):
+    by_version: dict[str, int] = Field(default_factory=dict)
+    top_sni: list[dict[str, Any]] = Field(default_factory=list)
+    top_ciphers: list[dict[str, Any]] = Field(default_factory=list)
+    top_alpn: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class CertificateStats(BaseModel):
+    total_certs: int = 0
+    self_signed_count: int = 0
+    expired_count: int = 0
+    valid_count: int = 0
+    top_issuers: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ProtocolStatsOut(BaseModel):
+    total_dns: int = 0
+    total_http: int = 0
+    total_tls: int = 0
+    total_certificates: int = 0
+    total_flows: int = 0
+    protocol_distribution: list[ProtocolDistributionItem] = Field(default_factory=list)
+    dns_stats: DnsStats = Field(default_factory=DnsStats)
+    http_stats: HttpStats = Field(default_factory=HttpStats)
+    tls_stats: TlsStats = Field(default_factory=TlsStats)
+    certificate_stats: CertificateStats = Field(default_factory=CertificateStats)

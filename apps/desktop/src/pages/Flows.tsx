@@ -248,6 +248,7 @@ export default function Flows() {
                   <th style={{ padding: '12px 12px' }}>Packets</th>
                   <th style={{ padding: '12px 12px' }}>Volume</th>
                   <th style={{ padding: '12px 12px' }}>TCP Flags</th>
+                  <th style={{ padding: '12px 12px' }}>Duration</th>
                   <th style={{ padding: '12px 16px' }}>Forensic Summary</th>
                 </tr>
               </thead>
@@ -333,6 +334,15 @@ export default function Flows() {
                         }}>
                           {flow.tcp_flags}
                         </span>
+                      </td>
+
+                      {/* Duration */}
+                      <td style={{ padding: '12px 12px', color: '#94a3b8', fontFamily: 'monospace', fontSize: '12px' }}>
+                        {flow.duration_seconds !== undefined
+                          ? flow.duration_seconds < 0.01
+                            ? '< 0.01s'
+                            : `${flow.duration_seconds.toFixed(2)}s`
+                          : '-'}
                       </td>
 
                       {/* Summary */}
@@ -453,7 +463,7 @@ export default function Flows() {
             </div>
 
             {/* Metrics Breakdown */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginTop: '14px' }}>
               <div style={{ backgroundColor: '#0b0f19', padding: '10px 14px', borderRadius: '8px' }}>
                 <div style={{ fontSize: '11px', color: '#64748b' }}>Total Packets</div>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', marginTop: '2px' }}>
@@ -465,6 +475,17 @@ export default function Flows() {
                 <div style={{ fontSize: '11px', color: '#64748b' }}>Total Volume</div>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: '#f8fafc', marginTop: '2px' }}>
                   {(selectedFlow.bytes_total / 1024).toFixed(1)} KB
+                </div>
+              </div>
+
+              <div style={{ backgroundColor: '#0b0f19', padding: '10px 14px', borderRadius: '8px' }}>
+                <div style={{ fontSize: '11px', color: '#64748b' }}>Duration</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: '#34d399', marginTop: '2px' }}>
+                  {selectedFlow.duration_seconds !== undefined
+                    ? selectedFlow.duration_seconds < 0.01
+                      ? '< 0.01s'
+                      : `${selectedFlow.duration_seconds.toFixed(2)}s`
+                    : '-'}
                 </div>
               </div>
 

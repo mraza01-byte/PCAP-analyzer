@@ -6,6 +6,7 @@ import {
   FileSearch,
   Globe,
   Home,
+  Layers,
   Network,
   Settings,
   Shield,
@@ -28,8 +29,9 @@ const NAV_ENTRIES: NavEntry[] = [
   { key: 'home',           label: 'Dashboard',      icon: Home,       phase: 1, implemented: true,  group: 'core' },
   { key: 'captures',       label: 'Captures',       icon: FileSearch, phase: 2, implemented: false, group: 'core' },
   // Analysis
-  { key: 'hosts',          label: 'Hosts',          icon: Globe,      phase: 3, implemented: false, group: 'analysis' },
-  { key: 'flows',          label: 'Flows',          icon: Network,    phase: 3, implemented: false, group: 'analysis' },
+  { key: 'hosts',          label: 'Hosts',          icon: Globe,      phase: 3, implemented: true,  group: 'analysis' },
+  { key: 'flows',          label: 'Flows',          icon: Network,    phase: 3, implemented: true,  group: 'analysis' },
+  { key: 'protocols',      label: 'Protocols',      icon: Layers,     phase: 3, implemented: true,  group: 'analysis' },
   { key: 'timeline',       label: 'Timeline',       icon: Activity,   phase: 3, implemented: false, group: 'analysis' },
   // Investigations
   { key: 'investigations', label: 'Investigations', icon: Shield,     phase: 4, implemented: false, group: 'analysis' },

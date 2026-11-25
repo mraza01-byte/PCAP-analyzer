@@ -9,6 +9,7 @@ const PAGE_LABELS: Record<PageKey, { title: string; subtitle: string }> = {
   captures:       { title: 'Captures',       subtitle: 'PCAP Evidence Library' },
   hosts:          { title: 'Hosts',          subtitle: 'Network Host Intelligence' },
   flows:          { title: 'Flows',          subtitle: 'Network Flow Analysis' },
+  protocols:      { title: 'Protocols',      subtitle: 'Protocol Intelligence & Deep Packet Inspection' },
   timeline:       { title: 'Timeline',       subtitle: 'Chronological Event Reconstruction' },
   investigations: { title: 'Investigations', subtitle: 'Forensic Case Management' },
   briefing:       { title: 'Briefing',       subtitle: 'Intelligence Briefing System' },
