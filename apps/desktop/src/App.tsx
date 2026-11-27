@@ -6,6 +6,7 @@ import Flows from './pages/Flows';
 import Home from './pages/Home';
 import Hosts from './pages/Hosts';
 import Investigations from './pages/Investigations';
+import Protocols from './pages/Protocols';
 import Settings from './pages/Settings';
 import Timeline from './pages/Timeline';
 import type { PageKey } from './types';
@@ -17,6 +18,7 @@ const PAGES: Record<PageKey, React.ComponentType> = {
   captures:       Captures,
   hosts:          Hosts,
   flows:          Flows,
+  protocols:      Protocols,
   timeline:       Timeline,
   investigations: Investigations,
   briefing:       Briefing,

@@ -10,7 +10,7 @@ import {
   ArrowRight,
   Download,
 } from 'lucide-react';
-import { getTimelineEvents, type TimelineEventRecord } from '../services/api';
+import { getTimelineEvents, getTimelineSummary, type TimelineEventRecord, type TimelineSummary } from '../services/api';
 
 export default function Timeline() {
   const [events, setEvents] = useState<TimelineEventRecord[]>([]);
@@ -20,6 +20,7 @@ export default function Timeline() {
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
+  const [summary, setSummary] = useState<TimelineSummary | null>(null);
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -31,6 +32,7 @@ export default function Timeline() {
         search: searchTerm || undefined,
       });
       setEvents(res.events);
+      setSummary(await getTimelineSummary());
     } catch (err) {
       console.error('Failed to load timeline events', err);
       setErrorMessage(err instanceof Error ? err.message : 'Could not load timeline');
@@ -63,8 +65,10 @@ export default function Timeline() {
     URL.revokeObjectURL(url);
   };
 
-  const criticalCount = events.filter((e) => e.severity === 'critical').length;
-  const highCount = events.filter((e) => e.severity === 'high').length;
+  // Counts come from the backend summary, so they stay correct while a filter is active.
+  const criticalCount = summary ? summary.by_severity.critical : events.filter((e) => e.severity === 'critical').length;
+  const highCount = summary ? summary.by_severity.high : events.filter((e) => e.severity === 'high').length;
+  const categoryButtons = ['ALL', ...(summary ? summary.by_category.map((c) => c.category) : [])];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -149,13 +153,13 @@ export default function Timeline() {
                   transition: 'all 0.15s',
                 }}
               >
-                {sev}
+                {sev}{summary && sev !== 'ALL' ? ` (${summary.by_severity[sev as keyof TimelineSummary['by_severity']]})` : ''}
               </button>
             ))}
           </div>
 
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center', backgroundColor: '#0b0f19', padding: '2px', borderRadius: '8px', border: '1px solid #1f2937' }}>
-            {['ALL', 'TCP', 'UDP', 'ICMP', 'Other'].map((cat) => (
+            {categoryButtons.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setCategoryFilter(cat)}

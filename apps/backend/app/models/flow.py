@@ -38,6 +38,12 @@ class Flow(IdTimestampMixin, Base):
     dst_host: Mapped["Host"] = relationship(foreign_keys=[dst_host_id])
     investigations: Mapped[list["Investigation"]] = relationship(secondary="investigation_flows", back_populates="flows")
 
+    @property
+    def duration_seconds(self) -> float:
+        if self.start_time and self.end_time:
+            return max(0.0, (self.end_time - self.start_time).total_seconds())
+        return 0.0
+
     __table_args__ = (
         Index("ix_flows_capture_id_start_time", "capture_id", "start_time"),
         Index("ix_flows_src_host_id", "src_host_id"),

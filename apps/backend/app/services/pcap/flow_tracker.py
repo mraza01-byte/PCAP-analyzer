@@ -46,6 +46,12 @@ class FlowTrackerItem:
         present = [f for f in order if f in self.seen_flags]
         return "/".join(present) if present else "-"
 
+    @property
+    def duration_seconds(self) -> float:
+        if self.start_time and self.end_time:
+            return max(0.0, (self.end_time - self.start_time).total_seconds())
+        return 0.0
+
 
 class FlowTracker:
     """Tracks and correlates packets into bidirectional conversation flows."""

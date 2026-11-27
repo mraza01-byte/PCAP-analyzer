@@ -709,3 +709,26 @@ def test_cors_blocks_other_websites(client):
 
 def test_upload_requires_a_file(client):
     assert client.post("/api/v1/captures/upload").status_code == 422
+
+
+def test_protocol_stats_and_endpoints(client):
+    stats_res = client.get("/api/v1/protocols/stats")
+    assert stats_res.status_code == 200
+    data = stats_res.json()
+    assert "total_dns" in data
+    assert "total_http" in data
+    assert "total_tls" in data
+    assert "total_certificates" in data
+    assert "protocol_distribution" in data
+    assert "dns_stats" in data
+    assert "http_stats" in data
+    assert "tls_stats" in data
+    assert "certificate_stats" in data
+
+    # Verify both path styles work
+    for path in ["dns", "http", "tls", "certificates"]:
+        res1 = client.get(f"/api/v1/{path}")
+        res2 = client.get(f"/api/v1/protocols/{path}")
+        assert res1.status_code == 200
+        assert res2.status_code == 200
+        assert res1.json() == res2.json()
