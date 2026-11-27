@@ -204,6 +204,9 @@ export interface InvestigationCaseRecord {
   findings?: string;
   ioc_list?: string;
   linked_capture_ids?: string;
+  capture_count?: number;
+  flow_count?: number;
+  event_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -368,8 +371,12 @@ export async function getTimelineEvents(params?: {
   severity?: string;
   search?: string;
   captureId?: string;
+  protocol?: string;
+  investigationId?: string;
 }): Promise<{ total: number; events: TimelineEventRecord[] }> {
   const query = new URLSearchParams();
+  if (params?.protocol) query.set('protocol', params.protocol);
+  if (params?.investigationId) query.set('investigation_id', params.investigationId);
   if (params?.category) query.set('category', params.category);
   if (params?.severity) query.set('severity', params.severity);
   if (params?.search) query.set('search', params.search);
@@ -434,6 +441,89 @@ export async function updateInvestigation(
 export async function deleteInvestigation(id: string): Promise<void> {
   const response = await fetch(`${API_BASE}/api/v1/investigations/${id}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(`Could not delete investigation (${response.status})`);
+}
+
+// ── Phase 4: Timeline summary, correlation and case evidence ────
+
+export interface TimelineSummary {
+  total: number;
+  by_severity: Record<'critical' | 'high' | 'warning' | 'info', number>;
+  by_category: { category: string; count: number }[];
+}
+
+export interface RelatedTimelineEvent {
+  relation: 'same_flow' | 'same_host';
+  event: TimelineEventRecord;
+}
+
+export interface InvestigationEvidenceRecord {
+  captures: CaptureRecord[];
+  flows: FlowRecord[];
+  events: TimelineEventRecord[];
+}
+
+/**
+ * Real counts per severity and category.
+ * GET /api/v1/timeline/summary
+ */
+export async function getTimelineSummary(params?: { captureId?: string; investigationId?: string }): Promise<TimelineSummary> {
+  const query = new URLSearchParams();
+  if (params?.captureId) query.set('capture_id', params.captureId);
+  if (params?.investigationId) query.set('investigation_id', params.investigationId);
+  return apiFetch<TimelineSummary>(`/api/v1/timeline/summary${query.toString() ? `?${query.toString()}` : ''}`);
+}
+
+/**
+ * Events correlated with one event (same flow, or same hosts within a time window).
+ * GET /api/v1/timeline/{id}/related
+ */
+export async function getRelatedEvents(eventId: string, windowSeconds = 60): Promise<{ event_id: string; total: number; related: RelatedTimelineEvent[] }> {
+  return apiFetch(`/api/v1/timeline/${eventId}/related?window_seconds=${windowSeconds}`);
+}
+
+/**
+ * Captures, flows and timeline events linked to a case.
+ * GET /api/v1/investigations/{id}/evidence
+ */
+export async function getInvestigationEvidence(caseId: string): Promise<InvestigationEvidenceRecord> {
+  return apiFetch<InvestigationEvidenceRecord>(`/api/v1/investigations/${caseId}/evidence`);
+}
+
+/**
+ * The case's own timeline (linked events plus events of linked flows).
+ * GET /api/v1/investigations/{id}/timeline
+ */
+export async function getInvestigationTimeline(caseId: string, includeCaptures = false): Promise<{ total: number; events: TimelineEventRecord[] }> {
+  return apiFetch(`/api/v1/investigations/${caseId}/timeline?include_captures=${includeCaptures}`);
+}
+
+/**
+ * Attach captures, flows and timeline events to a case.
+ * POST /api/v1/investigations/{id}/evidence
+ */
+export async function linkInvestigationEvidence(
+  caseId: string,
+  evidence: { capture_ids?: string[]; flow_ids?: string[]; event_ids?: string[] },
+): Promise<InvestigationCaseRecord> {
+  const response = await fetch(`${API_BASE}/api/v1/investigations/${caseId}/evidence`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(evidence),
+  });
+  if (!response.ok) {
+    const detail = await response.json().then((body) => body?.error?.message).catch(() => undefined);
+    throw new Error(detail || `Could not link evidence (${response.status})`);
+  }
+  return response.json();
+}
+
+/**
+ * Remove one piece of evidence from a case.
+ * DELETE /api/v1/investigations/{id}/evidence/{captures|flows|events}/{evidenceId}
+ */
+export async function unlinkInvestigationEvidence(caseId: string, kind: 'captures' | 'flows' | 'events', evidenceId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/v1/investigations/${caseId}/evidence/${kind}/${evidenceId}`, { method: 'DELETE' });
+  if (!response.ok) throw new Error(`Could not remove evidence (${response.status})`);
 }
 
 // ── Platform Settings & Diagnostics ────────────────────────────
